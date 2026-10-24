@@ -1,0 +1,24 @@
+[Unit]
+Description=Check saved SimpleInventory Home Assistant connection
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/simpleinventory-webui/app.env
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/opt/simpleinventory-webui/venv/bin/python /opt/simpleinventory-webui/setup-ha.py --check
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=30
+TimeoutStartSec=45
+User=root
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
