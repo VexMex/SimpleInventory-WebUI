@@ -110,6 +110,35 @@ class ItemTests(unittest.TestCase):
         self.assertNotIn("<script>", page.text)
         self.assertIn("&lt;script&gt;", page.text)
 
+    def test_choices_collect_multiple_values_and_escape_html(self):
+        self.backend.items += [
+            {"name":"Washer", "categories":["Hardware", "Metal"], "locations":["Shelf", "Box"]},
+            {"name":"Pin", "category":"Metal, Small", "location":'Box, <img src=x>'},
+        ]
+        for path in ("/items/new", "/items/edit?item=Bolt"):
+            page = self.client.get(path)
+            self.assertEqual(page.status_code, 200)
+            category = re.search(r'<datalist id="category-options">(.*?)</datalist>', page.text, re.S).group(1)
+            locations = re.search(r'<datalist id="location-options">(.*?)</datalist>', page.text, re.S).group(1)
+            self.assertEqual(category.count('value="Hardware"'), 1)
+            self.assertIn('value="Metal"', category)
+            self.assertIn('value="Small"', category)
+            self.assertIn('value="Box"', locations)
+            self.assertIn("&lt;img src=x&gt;", locations)
+            self.assertNotIn("<img src=x>", page.text)
+
+    def test_new_values_save_and_become_choices(self):
+        values = form(self.client)
+        values.update(category="New group", location="New room")
+        response = self.client.post("/items/new", data=values, follow_redirects=False)
+        self.assertEqual(response.status_code, 303)
+        page = self.client.get("/items/new")
+        self.assertIn('<option value="New group">', page.text)
+        self.assertIn('<option value="New room">', page.text)
+        values = form(self.client)
+        values.update(name="Unassigned item", category="", location="")
+        self.assertEqual(self.client.post("/items/new", data=values, follow_redirects=False).status_code, 303)
+
     def test_optional_auth_covers_writes(self):
         _, settings = policy()
         with TestClient(create_app(self.backend, settings, lambda:[]),

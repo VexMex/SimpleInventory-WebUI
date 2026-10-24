@@ -52,6 +52,22 @@ def editable(item):
             values[singular] = ", ".join(str(value) for value in item[plural])
     return values
 
+def item_choices(items):
+    """Existing values from the configured inventory, without blank duplicates."""
+    choices = {}
+    for singular, plural in (("category", "categories"), ("location", "locations")):
+        found = set()
+        for item in items:
+            values = item.get(plural)
+            if not isinstance(values, list):
+                value = item.get(singular, "")
+                values = value.split(",") if isinstance(value, str) else []
+            for value in values:
+                if isinstance(value, str) and value.strip():
+                    found.add(value.strip())
+        choices[singular] = sorted(found, key=lambda value: (value.casefold(), value))
+    return choices
+
 def fingerprint(item):
     values = editable(item)
     values["quantity"] = str(Decimal(str(values["quantity"])).normalize())
@@ -279,7 +295,7 @@ def create_app(client=None, policy=None, networks=None):
                 context={"inventory":None,"error":"Home Assistant oder das konfigurierte Inventar ist derzeit nicht erreichbar."},
                 status_code=503)
 
-    def item_form(request, values, action, old_name=None, expected=None):
+    def item_form(request, values, action, choices, old_name=None, expected=None):
         binding = request.cookies.get("siw_forms", "")
         if not re.fullmatch(r"[0-9a-f]{64}", binding):
             binding = os.urandom(32).hex()
@@ -287,21 +303,26 @@ def create_app(client=None, policy=None, networks=None):
                              "binding":hashlib.sha256(binding.encode()).hexdigest(),
                              "nonce":os.urandom(16).hex()})
         response = TEMPLATES.TemplateResponse(request=request, name="item.html",
-                                             context={"values":values,"action":action,"proof":proof})
+                                             context={"values":values,"action":action,"proof":proof,"choices":choices})
         response.set_cookie("siw_forms", binding, httponly=True, samesite="strict",
                             secure=request.url.scheme == "https", max_age=3600)
         return response
 
     @app.get("/items/new", response_class=HTMLResponse)
     async def new_item(request: Request):
-        return item_form(request, {"quantity":1}, "new")
+        try:
+            inventory = await client.read()
+            return item_form(request, {"quantity":1}, "new", item_choices(inventory["items"]))
+        except InventoryUnavailable:
+            return HTMLResponse("Inventar derzeit nicht erreichbar.", status_code=503)
 
     @app.get("/items/edit", response_class=HTMLResponse)
     async def edit_item(request: Request):
         try:
             inventory = await client.read()
             item = exact_item(inventory["items"], request.query_params.get("item", ""))
-            return item_form(request, editable(item), "edit", item["name"], fingerprint(item))
+            return item_form(request, editable(item), "edit", item_choices(inventory["items"]),
+                             item["name"], fingerprint(item))
         except WriteConflict:
             return HTMLResponse("Artikel nicht eindeutig vorhanden. Bitte Bestand neu laden.", status_code=409)
         except InventoryUnavailable:
