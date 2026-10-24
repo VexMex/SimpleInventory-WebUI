@@ -47,4 +47,23 @@ No Home Assistant token, application password or private runtime configuration w
 
 ## Remaining scope
 
-The WebUI, HA adapter, authentication, systemd application service and Proxmox host-side container creator are not implemented in this bootstrap. No application endpoint or inventory operation was tested.
+The WebUI, HA adapter, authentication and systemd application service are not implemented in this bootstrap. The host-side container creator was added and tested separately below. No application endpoint or inventory operation was tested.
+
+## Host-side one-command installer test
+
+Date: 2026-10-24
+
+PASS: the public main/install.sh entrypoint was invoked through the documented curl launcher on Proxmox. The full creation test used SIW_NONINTERACTIVE=1 and a test hostname; otherwise the proposed defaults and automatic free-ID selection were used.
+
+Validated:
+- Bash syntax: passed.
+- Existing guest ID: rejected before guest allocation.
+- Memory below minimum: rejected before guest allocation.
+- Disk below minimum: rejected before guest allocation.
+- Interactive terminal: all eight default prompts accepted; final cancellation exited successfully without creating a guest.
+- Full public one-command flow: created a fresh Debian 13 unprivileged LXC, enabled nesting, configured CPU/memory/disk/DHCP, waited for networking and installed dependencies.
+- Bootstrap SHA-256 verification: passed before container allocation.
+- Guest package consistency and eight direct-package imports: passed.
+- Full installer exit code: 0.
+
+No existing guest was reused or removed, and no HA credentials were configured. This test validates automated infrastructure and dependencies; the actual WebUI is still to be implemented.
