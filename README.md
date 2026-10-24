@@ -1,6 +1,6 @@
 # SimpleInventory-WebUI
 
-Current version: **0.3.0**, functional WebUI with inventory selection, item creation and editing. Saved baseline: **0.1.0**. See [changelog](CHANGELOG.md) and [version recovery notes](docs/versioning.md).
+Current development: **0.4.0-dev**, localization, display preferences and a shared visual design. Previous functional baseline: **0.3.0**. Saved baseline: **0.1.0**. See [changelog](CHANGELOG.md) and [version recovery notes](docs/versioning.md).
 
 A Python web interface for the Simple Inventory integration in Home Assistant.
 
@@ -74,3 +74,9 @@ See [WebUI configuration and access policy](docs/webui.md). Existing private HA 
 Existing Simple Inventory inventories are discovered using the HA sensor states already used by the application. The dropdown is sorted by name. Selection is kept in the URL, so separate tabs can work with separate inventories. Item forms are signed for the inventory they were opened in and never follow a later selection in another tab. Unknown or removed inventory IDs produce an error instead of falling back to another inventory.
 
 The connection helper now asks only for HA connection settings. It verifies read access to the alphabetically first available inventory, without prompting for an inventory or persisting a selection. Existing configuration files remain valid; their legacy SIW_INVENTORY_ID value is ignored. Inventory creation, renaming and deletion remain in Home Assistant and are not implemented in this WebUI.
+
+## Language and appearance
+
+The interface now supports German and English, defaults to the Home Assistant system language, and formats quantities, currencies and timestamps for the selected language. Open **Settings / Einstellungen** to change this browser's language, currency, light/dark mode, accent and spacing. Currency selection changes display formatting only; it never converts stored values.
+
+Installation-wide defaults and password behavior are configured in the protected local INI file `/etc/simpleinventory-webui/settings.ini`. Browser display overrides use a cookie. Authentication settings and credentials are never controlled by that cookie. Existing HA credentials and optional web.env settings are preserved. See [configuration, supported values and persistence](docs/settings.md).

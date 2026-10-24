@@ -33,8 +33,8 @@ BOOTSTRAP_SHA=5bcd879eee26b79a91b44517fb514a733c1abb9bc43438d1043a58842e7dae8f
 SETUP_REV=fd73d3a68780083e07827dbf6c903af0e0a9797c
 SETUP_SHA=0e94e8f959d4f4fb3c5ed5850fb77950e4cc3aac2d61aeaec392605fd5dc8618
 SERVICE_SHA=bfa927b38b5bd2e3670ce020860bbaa341c83e790fe2f522133ca54189477403
-WEB_REV=41f06bbc9007af8a8dce264e3a93ca14d756a7a0
-WEB_SHA=a9c01af591dc533b6baf06f097e41bfaa98b7d5e4dc12ed87507fcf3585f80af
+WEB_REV=1a6e14cbd807d5de3fa6dedf94c93599258c1333
+WEB_SHA=6412458190a0e99505540559a6c09dee4f4cc5b5f15a9bfcd49e4f95ee10a9d3
 REPOSITORY=https://raw.githubusercontent.com/VexMex/SimpleInventory-WebUI
 storage_available() {
   pvesm status --content "$2" | awk -v wanted="$1" 'NR>1 && $1==wanted && $3=="active" {found=1} END {exit !found}'

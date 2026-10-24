@@ -71,3 +71,9 @@ Each signed item form includes its original inventory ID. Saving validates that 
 The connection helper stores HA_URL, HA_TOKEN and HA_ALLOW_HTTP only. Legacy SIW_INVENTORY_ID settings are accepted but ignored, so an existing installation requires no credential migration or re-entry. Both manual setup and the boot check discover inventories and verify read access to the alphabetically first available inventory. No inventory or article is created by that check.
 
 Validation includes two simulated inventories, duplicate article names across inventories, independent tab selection, signed write targeting, removed inventories and the empty-inventory-list case. Real HA discovery, default selection and the saved-connection boot check also passed. The real connection currently exposes one inventory; no additional inventory was created for testing.
+
+## Localization and display preferences
+
+The current development UI supports German/English translations, HA system-language and time-zone detection, localized quantities/currency/timestamps, and browser display preferences. The shared layout supports light/dark/device mode, teal/blue accents, comfortable/compact spacing and narrow-screen inventory cards. Currency changes are formatting only.
+
+The protected installation INI is delivered to the service using systemd LoadCredential. Access-policy defaults come from its access section unless existing web.env values override them. Browser cookies control only display choices. See [settings and persistence](settings.md) for the configuration schema, supported languages/currencies, preference order, restart behavior and remaining limitations.

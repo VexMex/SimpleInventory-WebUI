@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0-dev - Unreleased
+
+- Add German/English translations with automatic HA system-language detection and a manual browser override.
+- Localize quantity, currency and last-loaded time displays using the HA time zone.
+- Add per-browser preferences for language, currency, light/dark/device appearance, accent and spacing.
+- Store installation defaults and password behavior in a protected local INI file, preserving private credentials and existing settings on updates.
+- Add a consistent design for the overview, item forms, settings, sign-in and error feedback, with adaptive narrow-screen layouts.
+- Preserve authentication boundaries: display cookies cannot change password requirements or local-network bypass.
+- Validate with 58 automated tests and live service and browser checks.
+
 ## 0.3.0 - 2026-10-24
 
 Functional WebUI baseline for the agreed initial feature scope.

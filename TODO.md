@@ -2,19 +2,23 @@
 
 Version 0.3.0 is the functional baseline for the agreed initial scope. This is an idea backlog, not a committed roadmap: items have no promised implementation date or release. Check feasibility and agree on scope before implementation.
 
+Implemented in the current development version: German/English localization and display settings. See [settings documentation](docs/settings.md). Central defaults use a protected INI file in the LXC; individual display overrides use a browser cookie.
+
 ## Language and localization
 
-- [ ] Add translations and automatically use the Home Assistant system language as the initial default.
-- [ ] Offer a manual language override in settings.
-- [ ] Localize number, currency and date formatting.
+- [x] Add German and English translations and automatically use the Home Assistant system language as the initial default.
+- [ ] Extend translation coverage to additional languages.
+- [x] Offer a manual language override in settings.
+- [x] Localize number, currency and date formatting.
 
 ## Settings and appearance
 
-- [ ] Add settings for currency display, language, styles, themes and password behavior.
-- [ ] Define where installation-wide settings and individual display preferences are stored.
-- [ ] Build a consistent visual design for the overview, forms, settings and feedback messages.
-- [ ] Add light mode, dark mode and an option to follow the device preference.
-- [ ] Keep currency selection a display preference unless currency conversion is explicitly added; do not imply that changing a symbol converts stored values.
+- [x] Add browser settings for currency display, language, styles and themes; keep password behavior in the central INI.
+- [ ] Add a guided setup flow for configuring the shared password and its protected local credentials.
+- [x] Define where installation-wide settings and individual display preferences are stored.
+- [x] Build a consistent visual design for the overview, forms, settings and feedback messages.
+- [x] Add light mode, dark mode and an option to follow the device preference.
+- [x] Keep currency selection a display preference unless currency conversion is explicitly added; do not imply that changing a symbol converts stored values.
 
 ## Authentication and external access
 
