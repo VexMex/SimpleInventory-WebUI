@@ -40,13 +40,13 @@ The server explicitly ignores forwarded HTTP headers and does not use X-Forwarde
 
 ## Validation
 
-39 automated tests passed in the Debian 13 test LXC, covering the HA setup and WebUI, including HTML escaping, empty inventories, upstream failure handling, optional password sessions, CSRF checks, login size/attempt limits, local-subnet changes and spoofed forwarding headers.
+43 automated tests passed in the Debian 13 test LXC, covering the HA setup and WebUI, including HTML escaping, empty inventories, upstream failure handling, optional password sessions, CSRF checks, login size/attempt limits, local-subnet changes and spoofed forwarding headers.
 
 A temporary test item was created, edited and renamed through the deployed forms with real HA, then removed. Existing inventory items and the private HA configuration remained unchanged. The service runs as its dedicated non-root user and the private HA configuration file was verified unchanged. The existing v0.1.0 snapshot remains the recovery baseline.
 
 ## Editing and save protection
 
-Editable fields are name, quantity, unit, category and location. Quantities allow zero and up to six decimal places, using a decimal point or comma. Empty category/location clears those values. Multiple values are comma-separated. Other HA item metadata is omitted from updates so it is preserved.
+Editable fields are name, quantity, unit, value per unit (EUR), category and location. Quantities allow zero and up to six decimal places, using a decimal point or comma. Empty category/location clears those values. Multiple values are comma-separated. Other HA item metadata is omitted from updates so it is preserved.
 
 Forms use signed, expiring, cookie-bound proofs even when password authentication is disabled. Replayed submissions are blocked. Before updating, the application compares the current editable values with the values shown when the form was opened. A conflict requires reopening the form. This catches changes observed before dispatch; HA does not expose an atomic conditional update, so a concurrent change in the brief interval before saving cannot be excluded.
 
@@ -55,3 +55,9 @@ Duplicate item names and aliases are checked before creation/renaming. After a w
 ## Group and location suggestions
 
 Creation and editing forms offer existing category and location values from items in the configured inventory using native editable dropdowns. Suggestions refresh whenever a form is opened. Blank values are excluded, duplicates are removed and the lists are sorted. Free text is accepted: new values are created by HA when saving the item and become suggestions on the next form load. Opening a form does not create any values. Multiple values may still be entered separated by commas. Native dropdown presentation and filtering follow the browser's behavior.
+
+## Units and euro values
+
+Unit fields offer existing non-empty units from items in the configured inventory, plus `stück`, as editable dropdown suggestions. New items default to `stück`; editing preserves the saved unit. A newly typed unit is saved with the item and appears on subsequent form loads.
+
+The Wert field maps to HA's existing `price` field and represents value per unit, independent of quantity. Enter a non-negative number with at most two decimal places, using a comma or decimal point. New items default to zero. The euro sign is displayed outside the input and is not submitted. The overview shows a Wert column with two decimal places and the euro symbol. Missing values appear as a dash. Numeric input and changes to price are covered by validation, stale-edit checks and post-save verification.

@@ -2,6 +2,9 @@
 
 ## 0.3.0-dev - Unreleased
 
+- Add editable unit dropdown suggestions and default new items to `stück`.
+- Add a numeric value-per-unit field backed by HA `price`, with euro formatting in the overview.
+
 - Offer existing groups and locations as editable dropdown suggestions on create and edit forms; new typed values are saved with the item.
 
 - Add and edit items through the WebUI: name, quantity, unit, category and location.
@@ -9,7 +12,7 @@
 - Add signed forms, duplicate-submission protection and checks for stale edits and duplicate names.
 - Verify writes by reading saved values; uncertain results are never retried automatically.
 - Update the pinned LXC installer and preserve private runtime settings.
-- Pass 39 automated tests and a real create/edit/rename test with temporary-item cleanup.
+- Pass 43 automated tests and a real create/edit/rename test with temporary-item cleanup.
 
 ## 0.2.0 - 2026-10-24
 
