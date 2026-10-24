@@ -20,6 +20,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from itsdangerous import URLSafeTimedSerializer, BadSignature
+from .preferences import InstallationSettings, PreferenceController
 
 ROOT = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(ROOT / "templates"))
@@ -152,6 +153,15 @@ class InventoryClient:
             raise InventoryUnavailable()
         return [row for row in result["items"] if isinstance(row, dict)]
 
+    async def locale_info(self):
+        async with self.connection() as (helper, ws, settings):
+            result = await helper.request(ws, 1, "get_config")
+            if not isinstance(result, dict):
+                raise InventoryUnavailable()
+            language, timezone = result.get("language"), result.get("time_zone")
+            return (language if isinstance(language,str) else "de",
+                    timezone if isinstance(timezone,str) else "UTC")
+
     async def available(self, helper, ws):
         states = await helper.request(ws, 1, "get_states")
         return [{"id":key,"name":name} for key,name in helper.inventories_from_states(states)]
@@ -264,9 +274,10 @@ class AccessPolicy:
     signing_key: str = ""
 
     @classmethod
-    def from_env(cls):
-        enabled = os.environ.get("SIW_AUTH_ENABLED", "false").lower()
-        bypass = os.environ.get("SIW_LOCAL_BYPASS", "true").lower()
+    def from_env(cls, configuration=None):
+        configuration = configuration or InstallationSettings.read()
+        enabled = os.environ.get("SIW_AUTH_ENABLED", str(configuration.enabled)).lower()
+        bypass = os.environ.get("SIW_LOCAL_BYPASS", str(configuration.local_bypass)).lower()
         if enabled not in {"true","false"} or bypass not in {"true","false"}:
             raise RuntimeError("Invalid authentication configuration")
         policy = cls(enabled == "true", bypass == "true",
@@ -287,9 +298,10 @@ def password_matches(password, encoded):
     except (ValueError, TypeError):
         return False
 
-def create_app(client=None, policy=None, networks=None):
+def create_app(client=None, policy=None, networks=None, configuration=None):
+    configuration = configuration or InstallationSettings.read()
     client = client or InventoryClient()
-    policy = policy if policy is not None else AccessPolicy.from_env()
+    policy = policy if policy is not None else AccessPolicy.from_env(configuration)
     networks = networks if networks is not None else LocalNetworks()
     signing = policy.signing_key or os.urandom(32).hex()
     session = URLSafeTimedSerializer(signing, salt="siw-session")
@@ -299,6 +311,17 @@ def create_app(client=None, policy=None, networks=None):
     write_lock = asyncio.Lock()
     attempts = defaultdict(deque)
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+    preferences = PreferenceController(client, configuration, policy, signing)
+
+    def render(*, request, name, context, status_code=200):
+        return TEMPLATES.TemplateResponse(request=request, name=name,
+            context={**request.state.ui, **context}, status_code=status_code)
+
+    def error_page(request, content, status_code=400):
+        return render(request=request, name="error.html", context={"error":content}, status_code=status_code)
+
+    preferences.install(app, render, error_page)
 
     def allowed(request):
         if not policy.enabled:
@@ -316,8 +339,9 @@ def create_app(client=None, policy=None, networks=None):
 
     @app.middleware("http")
     async def access_and_headers(request, call_next):
+        await preferences.prepare(request)
         if request.url.path not in {"/login","/health"} and not allowed(request):
-            response = (JSONResponse({"error":"Anmeldung erforderlich."}, status_code=401)
+            response = (JSONResponse({"error":request.state.ui["t"]("Anmeldung erforderlich.")}, status_code=401)
                         if request.url.path.startswith("/api/") else RedirectResponse("/login", status_code=303))
         else:
             response = await call_next(request)
@@ -334,13 +358,13 @@ def create_app(client=None, policy=None, networks=None):
     async def index(request: Request):
         try:
             data = await client.read(request.query_params.get("inventory"))
-            return TEMPLATES.TemplateResponse(request=request, name="index.html",
+            return render(request=request, name="index.html",
                                               context={"inventory":data,"error":None,
                                                        "saved":request.query_params.get("saved") == "1"})
         except InventoryNotFound:
-            return HTMLResponse("Inventar nicht vorhanden. Bitte die Inventarauswahl neu oeffnen: <a href=\"/\">Uebersicht</a>", status_code=404)
+            return error_page(request,"Inventar nicht vorhanden. Bitte die Inventarauswahl neu oeffnen.", status_code=404)
         except InventoryUnavailable:
-            return TEMPLATES.TemplateResponse(request=request, name="index.html",
+            return render(request=request, name="index.html",
                 context={"inventory":None,"error":"Home Assistant oder das konfigurierte Inventar ist derzeit nicht erreichbar."},
                 status_code=503)
 
@@ -352,7 +376,7 @@ def create_app(client=None, policy=None, networks=None):
                              "inventory_id":inventory["id"],
                              "binding":hashlib.sha256(binding.encode()).hexdigest(),
                              "nonce":os.urandom(16).hex()})
-        response = TEMPLATES.TemplateResponse(request=request, name="item.html",
+        response = render(request=request, name="item.html",
                                              context={"values":values,"action":action,"proof":proof,"choices":choices,"inventory":inventory})
         response.set_cookie("siw_forms", binding, httponly=True, samesite="strict",
                             secure=request.url.scheme == "https", max_age=3600)
@@ -366,9 +390,9 @@ def create_app(client=None, policy=None, networks=None):
                 raise InventoryNotFound()
             return item_form(request, {"quantity":1,"unit":"stück","price":"0,00"}, "new", item_choices(inventory["items"]), inventory)
         except InventoryNotFound:
-            return HTMLResponse("Inventar nicht vorhanden. Bitte die Inventarauswahl neu oeffnen: <a href=\"/\">Uebersicht</a>", status_code=404)
+            return error_page(request,"Inventar nicht vorhanden. Bitte die Inventarauswahl neu oeffnen.", status_code=404)
         except InventoryUnavailable:
-            return HTMLResponse("Inventar derzeit nicht erreichbar.", status_code=503)
+            return error_page(request,"Inventar derzeit nicht erreichbar.", status_code=503)
 
     @app.get("/items/edit", response_class=HTMLResponse)
     async def edit_item(request: Request):
@@ -378,23 +402,23 @@ def create_app(client=None, policy=None, networks=None):
             return item_form(request, editable(item), "edit", item_choices(inventory["items"]), inventory,
                              item["name"], fingerprint(item))
         except WriteConflict:
-            return HTMLResponse("Artikel nicht eindeutig vorhanden. Bitte Bestand neu laden.", status_code=409)
+            return error_page(request,"Artikel nicht eindeutig vorhanden. Bitte Bestand neu laden.", status_code=409)
         except InventoryNotFound:
-            return HTMLResponse("Inventar nicht vorhanden. Bitte die Inventarauswahl neu oeffnen: <a href=\"/\">Uebersicht</a>", status_code=404)
+            return error_page(request,"Inventar nicht vorhanden. Bitte die Inventarauswahl neu oeffnen.", status_code=404)
         except InventoryUnavailable:
-            return HTMLResponse("Inventar derzeit nicht erreichbar.", status_code=503)
+            return error_page(request,"Inventar derzeit nicht erreichbar.", status_code=503)
 
     @app.post("/items/{action}")
     async def save_item(action: str, request: Request):
         if action not in {"new", "edit"}:
-            return HTMLResponse("Seite nicht gefunden.", status_code=404)
+            return error_page(request,"Seite nicht gefunden.", status_code=404)
         if request.headers.get("content-type", "").split(";")[0] != "application/x-www-form-urlencoded":
-            return HTMLResponse("Ungueltige Eingabe.", status_code=400)
+            return error_page(request,"Ungueltige Eingabe.", status_code=400)
         body = bytearray()
         async for chunk in request.stream():
             body.extend(chunk)
             if len(body) > 16384:
-                return HTMLResponse("Eingabe zu gross.", status_code=413)
+                return error_page(request,"Eingabe zu gross.", status_code=413)
         try:
             raw = parse_qs(body.decode("utf-8"), max_num_fields=7, keep_blank_values=True)
             if any(len(value) != 1 for value in raw.values()) or set(raw) - set(EDIT_FIELDS) - {"proof"}:
@@ -410,11 +434,11 @@ def create_app(client=None, policy=None, networks=None):
             if action == "edit" and not isinstance(claim["old_name"], str):
                 raise ValueError()
         except (ValueError, UnicodeError, BadSignature, KeyError, TypeError, AttributeError):
-            return HTMLResponse("Formular ungueltig oder abgelaufen. Bitte neu oeffnen.", status_code=400)
+            return error_page(request,"Formular ungueltig oder abgelaufen. Bitte neu oeffnen.", status_code=400)
         try:
             fields = validate_fields(form)
         except InvalidFields:
-            return HTMLResponse("Name und eine Menge von 0 bis 1000000000 angeben (max. 6 Nachkommastellen). "
+            return error_page(request,"Name und eine Menge von 0 bis 1000000000 angeben (max. 6 Nachkommastellen). "
                                 "Wert als Zahl von 0 bis 1000000000 mit maximal 2 Nachkommastellen angeben. "
                                 "Textfelder duerfen keine Steuerzeichen enthalten. Mit Zurueck korrigieren.",
                                 status_code=422)
@@ -424,23 +448,23 @@ def create_app(client=None, policy=None, networks=None):
                 submitted.popitem(last=False)
             nonce = claim["nonce"]
             if nonce in submitted:
-                return HTMLResponse("Dieses Formular wurde bereits abgesendet. Bitte Bestand neu laden.",
+                return error_page(request,"Dieses Formular wurde bereits abgesendet. Bitte Bestand neu laden.",
                                     status_code=409)
             if len(submitted) >= 1000:
-                return HTMLResponse("Bitte spaeter erneut versuchen.", status_code=429)
+                return error_page(request,"Bitte spaeter erneut versuchen.", status_code=429)
             submitted[nonce] = now
             try:
                 await client.write(fields, old_name=claim["old_name"], expected=claim["expected"],
                                    inventory_id=claim["inventory_id"])
             except WriteConflict:
-                return HTMLResponse("Artikel bereits vorhanden oder zwischenzeitlich geaendert. "
+                return error_page(request,"Artikel bereits vorhanden oder zwischenzeitlich geaendert. "
                                     "Bitte Bestand neu laden und das Formular erneut oeffnen.", status_code=409)
             except InventoryNotFound:
-                return HTMLResponse("Inventar nicht mehr vorhanden. Bitte Uebersicht neu laden.", status_code=404)
+                return error_page(request,"Inventar nicht mehr vorhanden. Bitte Uebersicht neu laden.", status_code=404)
             except InventoryUnavailable:
-                return HTMLResponse("Home Assistant nicht erreichbar. Bitte Verbindung pruefen.", status_code=503)
+                return error_page(request,"Home Assistant nicht erreichbar. Bitte Verbindung pruefen.", status_code=503)
             except WriteUncertain:
-                return HTMLResponse("Speicherung nicht bestaetigt. Bitte zuerst den Bestand pruefen, "
+                return error_page(request,"Speicherung nicht bestaetigt. Bitte zuerst den Bestand pruefen, "
                                     "bevor du erneut speicherst.", status_code=502)
         return RedirectResponse("/?" + urlencode({"inventory":claim["inventory_id"],"saved":"1"}), status_code=303)
 
@@ -449,16 +473,16 @@ def create_app(client=None, policy=None, networks=None):
         try:
             return await client.read(request.query_params.get("inventory"))
         except InventoryNotFound:
-            return JSONResponse({"error":"Inventar nicht vorhanden."}, status_code=404)
+            return JSONResponse({"error":request.state.ui["t"]("Inventar nicht vorhanden.")}, status_code=404)
         except InventoryUnavailable:
-            return JSONResponse({"error":"Inventar derzeit nicht erreichbar."}, status_code=503)
+            return JSONResponse({"error":request.state.ui["t"]("Inventar derzeit nicht erreichbar.")}, status_code=503)
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_form(request: Request):
         if allowed(request):
             return RedirectResponse("/", status_code=303)
         nonce = csrf.dumps(os.urandom(16).hex())
-        response = TEMPLATES.TemplateResponse(request=request, name="login.html",
+        response = render(request=request, name="login.html",
                                              context={"csrf":nonce,"error":None})
         response.set_cookie("siw_login", nonce, httponly=True, samesite="strict",
                             secure=request.url.scheme == "https", max_age=600)
@@ -472,31 +496,31 @@ def create_app(client=None, policy=None, networks=None):
         async for chunk in request.stream():
             body.extend(chunk)
             if len(body) > 8192:
-                return HTMLResponse("Eingabe zu gross.", status_code=413)
+                return error_page(request,"Eingabe zu gross.", status_code=413)
         try:
             values = parse_qs(body.decode("utf-8"), max_num_fields=3, keep_blank_values=True)
             if any(len(value) != 1 for value in values.values()):
                 raise ValueError()
             form = {key:value[0] for key,value in values.items()}
         except (ValueError, UnicodeError):
-            return HTMLResponse("Ungueltige Eingabe.", status_code=400)
+            return error_page(request,"Ungueltige Eingabe.", status_code=400)
         nonce = form.get("csrf","")
         try:
             if not hmac.compare_digest(nonce, request.cookies.get("siw_login","")):
                 raise BadSignature("Mismatch")
             csrf.loads(nonce, max_age=600)
         except BadSignature:
-            return HTMLResponse("Anmeldeseite bitte neu laden.", status_code=400)
+            return error_page(request,"Anmeldeseite bitte neu laden.", status_code=400)
         peer = request.client.host if request.client else "unknown"
         recent = attempts[peer]
         now = time.monotonic()
         while recent and recent[0] < now - 60:
             recent.popleft()
         if len(recent) >= 5:
-            return HTMLResponse("Bitte spaeter erneut versuchen.", status_code=429)
+            return error_page(request,"Bitte spaeter erneut versuchen.", status_code=429)
         recent.append(now)
         if not password_matches(form.get("password",""), policy.digest):
-            return TEMPLATES.TemplateResponse(request=request, name="login.html",
+            return render(request=request, name="login.html",
                 context={"csrf":nonce,"error":"Passwort ungueltig."}, status_code=401)
         recent.clear()
         response = RedirectResponse("/", status_code=303)

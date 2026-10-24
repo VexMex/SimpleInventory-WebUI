@@ -1,41 +1,31 @@
-<!doctype html>
-<html lang="de">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SimpleInventory</title></head>
-<body>
-<h1>SimpleInventory</h1>
-{% if saved %}<p role="status">Artikel gespeichert.</p>{% endif %}
-
-{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+{% extends "base.html" %}
+{% block content %}
+<section class="hero"><div><p class="eyebrow">{{ t('Bestand im Blick') }}</p><h1>{{ inventory.name if inventory and inventory.id else t('Übersicht') }}</h1><p class="muted">{{ t('Artikel verwalten') }}</p></div>
+{% if inventory and inventory.id %}<a class="button" href="/items/new?inventory={{ inventory.id|urlencode }}">＋ {{ t('Artikel hinzufügen') }}</a>{% endif %}</section>
+{% if saved %}<p class="notice" role="status">{{ t('Artikel gespeichert.') }}</p>{% endif %}
+{% if error %}<p class="notice error" role="alert">{{ t(error) }}</p>{% endif %}
 {% if inventory %}
+<section class="panel">
 {% if inventory.inventories %}
-<form action="/" method="get">
-<label>Inventar <select name="inventory">
-{% for option in inventory.inventories %}
-<option value="{{ option.id }}"{% if option.id == inventory.id %} selected{% endif %}>{{ option.name }}</option>
-{% endfor %}
-</select></label> <button type="submit">Anzeigen</button>
-</form>
-<p><a href="/items/new?inventory={{ inventory.id|urlencode }}">Artikel hinzufügen</a></p>
-{% else %}<p>Keine Inventare verfügbar. Bitte in Home Assistant ein Inventar einrichten.</p>{% endif %}
-<h2>{{ inventory.name }}</h2>
-<p>{{ inventory['items']|length }} Artikel</p>
+<div class="toolbar"><form class="picker" action="/" method="get">
+<label>{{ t('Inventar') }} <select name="inventory">
+{% for option in inventory.inventories %}<option value="{{ option.id }}"{% if option.id == inventory.id %} selected{% endif %}>{{ option.name }}</option>{% endfor %}
+</select></label><button class="secondary" type="submit">{{ t('Anzeigen') }}</button></form>
+<span class="badge">{{ inventory['items']|length }} {{ t('Artikel') }}</span></div>
+{% else %}<p class="empty">{{ t('Keine Inventare verfügbar. Bitte in Home Assistant ein Inventar einrichten.') }}</p>{% endif %}
 {% if inventory['items'] %}
-<table border="1" cellpadding="8">
-<thead><tr><th>Artikel</th><th>Menge</th><th>Einheit</th><th>Wert</th><th>Gruppe</th><th>Standort</th><th>Aktion</th></tr></thead>
-<tbody>
-{% for item in inventory['items'] %}
-<tr>
-<td>{{ item.get('name', '') }}</td>
-<td>{{ item.get('quantity', '') }}</td>
-<td>{{ item.get('unit', '') }}</td>
-<td>{{ item.get('price')|euro_value }}</td>
-<td>{{ item.get('categories', [])|join(', ') or item.get('category', '') or '—' }}</td>
-<td>{{ item.get('locations', [])|join(', ') or item.get('location', '') or '—' }}</td>
-<td><a href="/items/edit?inventory={{ inventory.id|urlencode }}&amp;item={{ item.get('name', '')|urlencode }}">Bearbeiten</a></td>
-</tr>
-{% endfor %}
-</tbody></table>
-{% else %}<p>Dieses Inventar ist leer.</p>{% endif %}
-{% endif %}
-<p><a href="/{% if inventory and inventory.id %}?inventory={{ inventory.id|urlencode }}{% endif %}">Aktualisieren</a></p>
-</body></html>
+<div class="table-wrap"><table><thead><tr>{% for label in ['Artikel','Menge','Einheit','Wert','Gruppe','Standort','Aktion'] %}<th scope="col">{{ t(label) }}</th>{% endfor %}</tr></thead><tbody>
+{% for item in inventory['items'] %}<tr>
+<td data-label="{{ t('Artikel') }}">{{ item.get('name', '') }}</td>
+<td class="numeric" data-label="{{ t('Menge') }}">{{ quantity(item.get('quantity')) }}</td>
+<td data-label="{{ t('Einheit') }}">{{ item.get('unit', '') }}</td>
+<td class="numeric" data-label="{{ t('Wert') }}">{{ money(item.get('price')) }}</td>
+<td data-label="{{ t('Gruppe') }}">{{ item.get('categories', [])|join(', ') or item.get('category', '') or '—' }}</td>
+<td data-label="{{ t('Standort') }}">{{ item.get('locations', [])|join(', ') or item.get('location', '') or '—' }}</td>
+<td data-label="{{ t('Aktion') }}"><a class="edit-link" href="/items/edit?inventory={{ inventory.id|urlencode }}&amp;item={{ item.get('name', '')|urlencode }}">{{ t('Bearbeiten') }}</a></td>
+</tr>{% endfor %}
+</tbody></table></div>
+{% elif inventory.id %}<p class="empty">{{ t('Dieses Inventar ist leer.') }}</p>{% endif %}
+<div class="table-footer"><span>{{ t('Zuletzt geladen') }} {{ loaded_at }}</span><a href="/{% if inventory.id %}?inventory={{ inventory.id|urlencode }}{% endif %}">{{ t('Aktualisieren') }}</a></div>
+</section>{% endif %}
+{% endblock %}

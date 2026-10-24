@@ -9,7 +9,7 @@ Type=simple
 User=simpleinventory-webui
 Group=simpleinventory-webui
 WorkingDirectory=/opt/simpleinventory-webui/current
-Environment=SIW_AUTH_ENABLED=false
+LoadCredential=ui-settings:/etc/simpleinventory-webui/settings.ini
 EnvironmentFile=-/etc/simpleinventory-webui/app.env
 EnvironmentFile=-/etc/simpleinventory-webui/web.env
 ExecStart=/opt/simpleinventory-webui/venv/bin/python -m uvicorn webui.web:app --host 0.0.0.0 --port 80 --no-proxy-headers --no-access-log

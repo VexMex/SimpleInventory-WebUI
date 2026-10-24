@@ -1,29 +1,19 @@
-<!doctype html>
-<html lang="de">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Artikel | SimpleInventory</title></head>
-<body>
-<h1>Artikel {% if action == 'new' %}hinzufügen{% else %}bearbeiten{% endif %}</h1>
-<p>Inventar: <strong>{{ inventory.name }}</strong></p>
-<form action="/items/{{ action }}" method="post">
+{% extends "base.html" %}
+{% block content %}<div class="form-shell">
+<section class="hero"><div><p class="eyebrow">{{ t('Artikel verwalten') }}</p><h1>{{ t('Artikel hinzufügen') if action == 'new' else t('Artikel bearbeiten') }}</h1><p class="muted">{{ t('Inventar') }}: <strong>{{ inventory.name }}</strong></p></div></section>
+<form class="panel" action="/items/{{ action }}" method="post">
 <input type="hidden" name="proof" value="{{ proof }}">
-<p><label>Name <input name="name" value="{{ values.get('name', '') }}" maxlength="200" required></label></p>
-<p><label>Menge <input name="quantity" value="{{ values.get('quantity', '') }}" inputmode="decimal" required></label></p>
-<p><label>Einheit <input name="unit" list="unit-options" autocomplete="off" value="{{ values.get('unit', '') }}" maxlength="40"></label></p>
-<p><label>Wert <input name="price" value="{{ values.get('price', '0,00') }}" inputmode="decimal" maxlength="13" required aria-describedby="price-help"></label> €</p>
-<p id="price-help">Wert pro Einheit, z. B. 12,50. Nur die Zahl eingeben.</p>
-<p><label>Gruppe <input name="category" list="category-options" autocomplete="off" value="{{ values.get('category', '') }}" maxlength="500"></label></p>
-<p><label>Standort <input name="location" list="location-options" autocomplete="off" value="{{ values.get('location', '') }}" maxlength="500"></label></p>
-<datalist id="unit-options">
-{% for value in choices.unit %}<option value="{{ value }}"></option>{% endfor %}
-</datalist>
-<datalist id="category-options">
-{% for value in choices.category %}<option value="{{ value }}"></option>{% endfor %}
-</datalist>
-<datalist id="location-options">
-{% for value in choices.location %}<option value="{{ value }}"></option>{% endfor %}
-</datalist>
-<p>Vorhandenen Wert auswählen oder neuen Wert eintippen. Neue Einheiten, Gruppen und Standorte werden beim Speichern angelegt.</p>
-<p>Mehrere Gruppen oder Standorte mit Komma trennen.</p>
-<button type="submit">Speichern</button> <a href="/?inventory={{ inventory.id|urlencode }}">Abbrechen</a>
-</form>
-</body></html>
+<div class="form-grid">
+<label class="full">{{ t('Name') }} <input name="name" value="{{ values.get('name', '') }}" maxlength="200" required autocomplete="off"></label>
+<label>{{ t('Menge') }} <input name="quantity" value="{{ values.get('quantity', '') }}" inputmode="decimal" required></label>
+<label>{{ t('Einheit') }} <input name="unit" list="unit-options" autocomplete="off" value="{{ values.get('unit', '') }}" maxlength="40"></label>
+<div class="full"><label for="price">{{ t('Wert') }}</label><div class="money-input"><input id="price" name="price" value="{{ values.get('price', '0,00') }}" inputmode="decimal" maxlength="13" required aria-describedby="price-help"><span>{{ currency_symbol }}</span></div><p class="help" id="price-help">{{ t('Wert pro Einheit. Nur die Zahl eingeben.') }}</p></div>
+<label>{{ t('Gruppe') }} <input name="category" list="category-options" autocomplete="off" value="{{ values.get('category', '') }}" maxlength="500"></label>
+<label>{{ t('Standort') }} <input name="location" list="location-options" autocomplete="off" value="{{ values.get('location', '') }}" maxlength="500"></label>
+</div>
+<datalist id="unit-options">{% for value in choices.unit %}<option value="{{ value }}"></option>{% endfor %}</datalist>
+<datalist id="category-options">{% for value in choices.category %}<option value="{{ value }}"></option>{% endfor %}</datalist>
+<datalist id="location-options">{% for value in choices.location %}<option value="{{ value }}"></option>{% endfor %}</datalist>
+<p class="help">{{ t('Vorhandenen Wert auswählen oder neuen Wert eintippen.') }} {{ t('Neue Einheiten, Gruppen und Standorte werden beim Speichern angelegt.') }} {{ t('Mehrere Gruppen oder Standorte mit Komma trennen.') }}</p>
+<div class="form-actions"><button type="submit">{{ t('Speichern') }}</button><a class="button secondary" href="/?inventory={{ inventory.id|urlencode }}">{{ t('Abbrechen') }}</a></div>
+</form></div>{% endblock %}

@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="{{ language }}" data-theme="{{ display.theme }}" data-accent="{{ display.accent }}" data-density="{{ display.density }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark"><title>{% block title %}SimpleInventory{% endblock %}</title>
+<style>{% include 'styles.css' %}</style></head>
+<body>
+<a class="skip" href="#content">{{ t('Übersicht') }}</a>
+<header class="topbar"><a class="brand" href="/"><span class="brand-icon" aria-hidden="true">▦</span>SimpleInventory<span class="brand-tag">WEB</span></a>
+<nav aria-label="{{ t('Übersicht') }}"><a href="/" {% if request.url.path == '/' %}aria-current="page"{% endif %}>{{ t('Übersicht') }}</a><a href="/settings" {% if request.url.path == '/settings' %}aria-current="page"{% endif %}>{{ t('Einstellungen') }}</a></nav></header>
+<main id="content">{% block content %}{% endblock %}</main>
+<footer>SimpleInventory <span aria-hidden="true">·</span> {{ t('Einfach organisiert.') }}</footer>
+</body></html>

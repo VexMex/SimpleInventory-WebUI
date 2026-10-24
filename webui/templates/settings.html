@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Einstellungen') }} — SimpleInventory{% endblock %}
+{% block content %}
+<section class="hero"><div><p class="eyebrow">{{ t('Anzeige für diesen Browser') }}</p><h1>{{ t('Einstellungen') }}</h1><p class="muted">{{ t('Diese Einstellungen gelten nur für diesen Browser.') }}</p></div></section>
+{% if saved %}<p class="notice" role="status">{{ t('Browser-Einstellungen gespeichert.') }}</p>{% endif %}
+<div class="settings-grid"><form class="panel" method="post" action="/settings">
+<input type="hidden" name="proof" value="{{ proof }}">
+<h2>{{ t('Darstellung') }}</h2>
+<div class="form-grid">
+{% set fields = [('language','Sprache',[('auto','Home-Assistant-Sprache'),('de','Deutsch'),('en','English')]),('currency','Währung',[('EUR','EUR — €'),('USD','USD — $'),('GBP','GBP — £'),('CHF','CHF')]),('theme','Darstellung',[('auto','Systemeinstellung'),('light','Hell'),('dark','Dunkel')]),('accent','Farbstil',[('teal','Petrol'),('blue','Blau')]),('density','Abstände',[('comfortable','Komfortabel'),('compact','Kompakt')])] %}
+{% for key,label,options in fields %}
+<label>{{ t(label) }}<select name="{{ key }}">
+<option value="default"{% if key not in overrides %} selected{% endif %}>{{ t('Standard der Installation') }}</option>
+{% for value,caption in options %}<option value="{{ value }}"{% if overrides.get(key) == value %} selected{% endif %}>{{ t(caption) }}</option>{% endfor %}
+</select></label>{% endfor %}</div>
+<p class="help">{{ t('Die Währung ändert nur die Anzeige. Beträge werden nicht umgerechnet.') }}</p>
+<div class="form-actions"><button type="submit">{{ t('Speichern') }}</button><button class="secondary" name="reset" value="1" type="submit">{{ t('Standardwerte verwenden') }}</button></div>
+</form>
+<aside class="panel"><p class="eyebrow">{{ t('Zentrale Vorgaben') }}</p><h2>{{ t('Passwortschutz') }}</h2><p class="muted">{{ t('Diese Vorgaben werden zentral verwaltet und gelten für alle Browser.') }}</p>
+<dl class="status-list"><div><dt>{{ t('Sprache') }}</dt><dd>{{ t('Home-Assistant-Sprache') if configuration.display.language == 'auto' else configuration.display.language }}</dd></div>
+<div><dt>{{ t('Währung') }}</dt><dd>{{ configuration.display.currency }}</dd></div>
+<div><dt>{{ t('Darstellung') }}</dt><dd>{{ t({'auto':'Systemeinstellung','light':'Hell','dark':'Dunkel'}[configuration.display.theme]) }}</dd></div>
+<div><dt>{{ t('Passwortschutz') }}</dt><dd>{{ t('Aktiviert') if access.enabled else t('Deaktiviert') }}</dd></div>
+<div><dt>{{ t('Lokales Netzwerk ohne Passwort') }}</dt><dd>{{ t('Aktiviert') if access.local_bypass and access.enabled else '—' }}</dd></div></dl></aside></div>
+{% endblock %}
