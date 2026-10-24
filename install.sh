@@ -30,11 +30,11 @@ done
 # Immutable, reviewed guest bootstrap and its checksum.
 BOOTSTRAP_REV=c11eecb5e867f0841e5bde1fa1c6d8702a8ecbec
 BOOTSTRAP_SHA=5bcd879eee26b79a91b44517fb514a733c1abb9bc43438d1043a58842e7dae8f
-SETUP_REV=71ed59f38359c4f78ef8ae1183968be035346aed
-SETUP_SHA=546e2554a858198fa25c2f142c26e4e5c2928148ff141b15ad2b00cb9f251e53
+SETUP_REV=fd73d3a68780083e07827dbf6c903af0e0a9797c
+SETUP_SHA=0e94e8f959d4f4fb3c5ed5850fb77950e4cc3aac2d61aeaec392605fd5dc8618
 SERVICE_SHA=bfa927b38b5bd2e3670ce020860bbaa341c83e790fe2f522133ca54189477403
-WEB_REV=0a8df7ab8bb142c6d867f632b2b2e002d6ae709b
-WEB_SHA=dbfa94f337f8b28b56270b85a439b70357c810a2604d01f40f89ff239a2ace37
+WEB_REV=41f06bbc9007af8a8dce264e3a93ca14d756a7a0
+WEB_SHA=a9c01af591dc533b6baf06f097e41bfaa98b7d5e4dc12ed87507fcf3585f80af
 REPOSITORY=https://raw.githubusercontent.com/VexMex/SimpleInventory-WebUI
 storage_available() {
   pvesm status --content "$2" | awk -v wanted="$1" 'NR>1 && $1==wanted && $3=="active" {found=1} END {exit !found}'

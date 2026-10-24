@@ -8,7 +8,7 @@ After LXC creation, open Console in the Proxmox web interface. The installer con
 
 The installer downloads this helper and its boot check automatically, but never starts the interactive login setup. It verifies their SHA-256 checksums before creating the LXC.
 
-The helper asks for the HA base URL, a long-lived access token (hidden input), and an existing Simple Inventory inventory. It reads the item list to confirm API access before saving. It does not test write access or change inventory data.
+The helper asks for the HA base URL and a long-lived access token (hidden input). It discovers existing Simple Inventory inventories and checks the alphabetically first one without prompting for a selection. It reads the item list to confirm API access before saving. It does not test write access or change inventory data.
 
 For plain HTTP, it explains that the token crosses the network unencrypted and requires an explicit choice. HTTPS uses normal certificate verification; there is no TLS-bypass option. Proxy environment variables are not used for this connection.
 
@@ -27,7 +27,7 @@ The helper stores no HA account password. It authenticates using the manually pr
 
 HA does not provide a normal user-setting scope restricting this token exclusively to Simple Inventory. Non-admin removes administration privileges, but is not an inventory-only permission boundary. The built-in Users group can also read/control other entities.
 
-The reviewed Simple Inventory v0.6.0 WebSocket implementation does not implement a per-user inventory allowlist. Selecting an inventory in this setup configures application behavior, not HA authorization. Dashboard visibility is not API authorization either. Strict inventory-only access would require an additional gateway with enforced command rules or changes to the HA integration, beyond this setup.
+The reviewed Simple Inventory v0.6.0 WebSocket implementation does not implement a per-user inventory allowlist. Selecting an inventory in the WebUI configures application behavior, not HA authorization. Dashboard visibility is not API authorization either. Strict inventory-only access would require an additional gateway with enforced command rules or changes to the HA integration, beyond this setup.
 
 References:
 - https://www.home-assistant.io/docs/configuration/user-configuration/
@@ -49,12 +49,12 @@ Manual check:
 /usr/local/bin/simpleinventory-setup --check
 ```
 
-A restart does not require entering the token again. Revoking/expiring the token, disabling/deleting the HA user, changing the HA URL or removing the inventory may require reconfiguration.
+A restart does not require entering the token again. Revoking/expiring the token, disabling/deleting the HA user, changing the HA URL or removing all inventories may require attention. Removing one inventory does not require re-entering credentials when another remains available.
 
-The eventual WebUI must reuse this configuration loader and reconnect with the stored token. The WebUI service itself has not been implemented yet.
+The WebUI reconnects with the saved settings, lists existing inventories and defaults to the alphabetically first one. New settings contain HA_URL, HA_TOKEN and HA_ALLOW_HTTP only. Legacy SIW_INVENTORY_ID settings are ignored; existing files are not rewritten by an application update.
 
 ## Validation
 
-Nine automated tests with synthetic tokens and a local simulated HA server passed in the Debian 13 test LXC: protected file roundtrip, unsafe permissions and symlink rejection, failed validation preserving prior settings, unsafe URL rejection, explicit HTTP choice, repeated connections using saved settings, auth failure redaction, and API failure redaction. No real HA token was used in these tests.
+Eleven automated tests with synthetic tokens and a local simulated HA server passed in the Debian 13 test LXC: protected file roundtrip, unsafe permissions and symlink rejection, failed validation preserving prior settings, unsafe URL rejection, explicit HTTP choice, repeated connections using saved settings, auth failure redaction, and API failure redaction. No real HA token was used in these tests.
 
-The helper and enabled systemd unit were also installed in the existing test LXC. The absolute command path and systemd unit validation passed. With no private configuration present, the boot-check condition correctly skips the service. No real HA login or reboot with a real token has been tested.
+The helper and enabled systemd unit were also installed in the existing test LXC. The absolute command path and systemd unit validation passed. With no private configuration present, the boot-check condition correctly skips the service. Saved real HA authentication and the boot-check service were subsequently verified successfully. This update did not reboot the container.

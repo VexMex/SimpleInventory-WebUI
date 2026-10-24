@@ -4,7 +4,7 @@
 
 The systemd service simpleinventory-web.service listens on 0.0.0.0:80. Use the LXC IPv4 address or a DNS name resolving to it in a browser. A separate DNS record must be provided by your router or DNS server if desired.
 
-GET / displays the configured inventory and its items. GET /api/inventory provides the same selected fields as JSON. Both read fresh data from HA. GET /items/new opens a creation form. GET /items/edit?item=NAME opens an existing item. POST /items/new and POST /items/edit save through HA simple_inventory.add_item and simple_inventory.update_item services. Only the configured inventory can be changed; the browser cannot choose another inventory. GET /health checks the web process, not HA connectivity.
+GET / displays the selected inventory and its items. GET /api/inventory provides the same selected fields as JSON. Both read fresh data from HA. GET /items/new opens a creation form. GET /items/edit?item=NAME opens an existing item. POST /items/new and POST /items/edit save through HA simple_inventory.add_item and simple_inventory.update_item services. A request may select an existing discovered inventory through the inventory query parameter. The server validates this selection before reading or writing. GET /health checks the web process, not HA connectivity.
 
 On HA connection, authentication or inventory failure, the UI responds with a neutral message and HTTP 503. Tokens, HA addresses and upstream exception payloads are not exposed. HTML templates escape HA-provided content.
 
@@ -40,7 +40,7 @@ The server explicitly ignores forwarded HTTP headers and does not use X-Forwarde
 
 ## Validation
 
-43 automated tests passed in the Debian 13 test LXC, covering the HA setup and WebUI, including HTML escaping, empty inventories, upstream failure handling, optional password sessions, CSRF checks, login size/attempt limits, local-subnet changes and spoofed forwarding headers.
+50 automated tests passed in the Debian 13 test LXC, covering the HA setup and WebUI, including HTML escaping, empty inventories, upstream failure handling, optional password sessions, CSRF checks, login size/attempt limits, local-subnet changes and spoofed forwarding headers.
 
 A temporary test item was created, edited and renamed through the deployed forms with real HA, then removed. Existing inventory items and the private HA configuration remained unchanged. The service runs as its dedicated non-root user and the private HA configuration file was verified unchanged. The existing v0.1.0 snapshot remains the recovery baseline.
 
@@ -54,10 +54,20 @@ Duplicate item names and aliases are checked before creation/renaming. After a w
 
 ## Group and location suggestions
 
-Creation and editing forms offer existing category and location values from items in the configured inventory using native editable dropdowns. Suggestions refresh whenever a form is opened. Blank values are excluded, duplicates are removed and the lists are sorted. Free text is accepted: new values are created by HA when saving the item and become suggestions on the next form load. Opening a form does not create any values. Multiple values may still be entered separated by commas. Native dropdown presentation and filtering follow the browser's behavior.
+Creation and editing forms offer existing category and location values from items in the selected inventory using native editable dropdowns. Suggestions refresh whenever a form is opened. Blank values are excluded, duplicates are removed and the lists are sorted. Free text is accepted: new values are created by HA when saving the item and become suggestions on the next form load. Opening a form does not create any values. Multiple values may still be entered separated by commas. Native dropdown presentation and filtering follow the browser's behavior.
 
 ## Units and euro values
 
-Unit fields offer existing non-empty units from items in the configured inventory, plus `stück`, as editable dropdown suggestions. New items default to `stück`; editing preserves the saved unit. A newly typed unit is saved with the item and appears on subsequent form loads.
+Unit fields offer existing non-empty units from items in the selected inventory, plus `stück`, as editable dropdown suggestions. New items default to `stück`; editing preserves the saved unit. A newly typed unit is saved with the item and appears on subsequent form loads.
 
 The Wert field maps to HA's existing `price` field and represents value per unit, independent of quantity. Enter a non-negative number with at most two decimal places, using a comma or decimal point. New items default to zero. The euro sign is displayed outside the input and is not submitted. The overview shows a Wert column with two decimal places and the euro symbol. Missing values appear as a dash. Numeric input and changes to price are covered by validation, stale-edit checks and post-save verification.
+
+## Inventory selection
+
+GET / and GET /api/inventory discover available inventory sensors and select the alphabetically first inventory when no inventory parameter is supplied. The dropdown uses GET /?inventory=ID with an Anzeigen button and lists inventories sorted by display name, then ID to break ties. Read and item-form links retain that parameter. An explicitly unknown or removed ID returns 404; it is never replaced with the default inventory. With no inventories, the overview explains that an inventory must first be configured in HA and does not offer item creation.
+
+Each signed item form includes its original inventory ID. Saving validates that the inventory still exists and returns to that inventory. A selection change in a different tab or an added query parameter cannot redirect an existing form's write. Category, location and unit suggestions use only the selected inventory. Inventory administration is intentionally absent: no HA integration creation, update or removal commands are used.
+
+The connection helper stores HA_URL, HA_TOKEN and HA_ALLOW_HTTP only. Legacy SIW_INVENTORY_ID settings are accepted but ignored, so an existing installation requires no credential migration or re-entry. Both manual setup and the boot check discover inventories and verify read access to the alphabetically first available inventory. No inventory or article is created by that check.
+
+Validation includes two simulated inventories, duplicate article names across inventories, independent tab selection, signed write targeting, removed inventories and the empty-inventory-list case. Real HA discovery, default selection and the saved-connection boot check also passed. The real connection currently exposes one inventory; no additional inventory was created for testing.
