@@ -19,8 +19,8 @@ fetch() {
 }
 fetch webui/__init__.py __init__.py e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 fetch webui/web.py web.py 5f969373266ff6dcfe7dc43e3707e3e6eee8e32651a0b07365741bdd79959ed0
-fetch webui/templates/index.html index.html 0b0f916afa1885456c2da675e1de99be42a9ab309f08030df34edd240dfc1b55
-fetch webui/templates/login.html login.html 8d3567a077ffedfba599a1d555309bbeb5a6c9617b3df1d5376d0ccd450ef469
+fetch webui/templates/index.html index.html 8b27e9193cb1b11c9ab1fdaab0b864df7bf8b59e0ea056ea51e35be9d97611c1
+fetch webui/templates/login.html login.html c0005cad267992ec0a0072e54b14ee35317abd781786b653cfe131cc474c0954
 fetch install/simpleinventory-web.service web.service 8e04b8b821475b24718e03f771425bb698a6ca65eed7350cbb15d6d19605005e
 fetch scripts/setup_ha.py setup-ha.py 546e2554a858198fa25c2f142c26e4e5c2928148ff141b15ad2b00cb9f251e53
 "$APP_ROOT/venv/bin/python" -c 'import fastapi,uvicorn,jinja2,websockets,itsdangerous'
