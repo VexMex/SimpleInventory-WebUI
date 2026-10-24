@@ -1,5 +1,7 @@
 # SimpleInventory-WebUI
 
+Current baseline: **0.1.0**. See [changelog](CHANGELOG.md) and [version recovery notes](docs/versioning.md).
+
 A planned Python web interface for the Simple Inventory integration in Home Assistant.
 
 ## Current state
