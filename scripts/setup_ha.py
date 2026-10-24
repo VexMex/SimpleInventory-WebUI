@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import stat
 import sys
+import subprocess
 import tempfile
 import warnings
 from urllib.parse import urlsplit, urlunsplit
@@ -205,6 +206,11 @@ def setup():
     save_config(values)
     print(f"Anmeldung geprueft und lokal gespeichert; {count} Artikel lesbar.")
     print("Zugangsdaten werden nach Neustarts wiederverwendet. Kein HA-Passwort gespeichert.")
+    if Path("/etc/systemd/system/simpleinventory-web.service").exists():
+        result = subprocess.run(["systemctl", "restart", "simpleinventory-web.service"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if result.returncode:
+            print("Konfiguration gespeichert. Webdienst bitte manuell neu starten.")
 
 def main():
     parser = argparse.ArgumentParser(description="Home Assistant fuer SimpleInventory-WebUI einrichten.")
