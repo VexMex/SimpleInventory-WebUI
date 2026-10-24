@@ -37,7 +37,7 @@ class PreferenceTests(unittest.TestCase):
             self.assertIn('<html lang="en"', client.get("/").text)
             self.assertIn("Add item",client.get("/items/new").text)
             self.assertEqual(self.backend.locale_calls,1)
-            page = client.post("/items/new",data={})
+            page = client.post("/items/new",data={"proof":"invalid"})
             self.assertEqual(page.status_code,400)
             self.assertIn("Form invalid or expired",page.text)
     def test_browser_preferences_persist_and_do_not_affect_another_browser(self):
