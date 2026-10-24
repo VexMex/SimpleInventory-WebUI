@@ -1,7 +1,9 @@
-"""Read-only inventory WebUI. Credentials stay in the server process."""
+"""Inventory WebUI. Credentials stay in the server process."""
 from __future__ import annotations
 import asyncio
-from collections import defaultdict, deque
+from collections import defaultdict, deque, OrderedDict
+from contextlib import asynccontextmanager
+from decimal import Decimal, InvalidOperation
 from dataclasses import dataclass
 import hashlib
 import hmac
@@ -32,40 +34,130 @@ def load_helper():
 class InventoryUnavailable(Exception):
     pass
 
+class WriteConflict(Exception):
+    pass
+
+class WriteUncertain(Exception):
+    pass
+
+class InvalidFields(Exception):
+    pass
+
+EDIT_FIELDS = ("name", "quantity", "unit", "category", "location")
+
+def editable(item):
+    values = {key: item.get(key, "") for key in EDIT_FIELDS}
+    for singular, plural in (("category", "categories"), ("location", "locations")):
+        if isinstance(item.get(plural), list):
+            values[singular] = ", ".join(str(value) for value in item[plural])
+    return values
+
+def fingerprint(item):
+    values = editable(item)
+    values["quantity"] = str(Decimal(str(values["quantity"])).normalize())
+    return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
+
+def validate_fields(form):
+    result = {}
+    for key, maximum in (("name", 200), ("unit", 40), ("category", 500), ("location", 500)):
+        value = str(form.get(key, "")).strip()
+        if len(value) > maximum or re.search(r"[\x00-\x1f\x7f-\x9f]", value):
+            raise InvalidFields()
+        result[key] = value
+    if not result["name"]:
+        raise InvalidFields()
+    value = str(form.get("quantity", "")).strip().replace(",", ".")
+    if not re.fullmatch(r"\d{1,10}(?:\.\d{1,6})?", value, flags=re.ASCII):
+        raise InvalidFields()
+    amount = Decimal(value)
+    if amount > 1000000000:
+        raise InvalidFields()
+    result["quantity"] = float(amount)
+    for key in ("category", "location"):
+        result[key] = ", ".join(dict.fromkeys(part.strip() for part in result[key].split(",") if part.strip()))
+    return result
+
+def exact_item(items, name):
+    matches = [item for item in items if item.get("name") == name]
+    if len(matches) != 1:
+        raise WriteConflict()
+    return matches[0]
+
 class InventoryClient:
+    @asynccontextmanager
+    async def connection(self):
+        helper = load_helper()
+        settings = helper.validate({key: os.environ.get(key, "") for key in helper.FIELDS})
+        url = helper.urlsplit(settings["HA_URL"])
+        endpoint = helper.urlunsplit(("wss" if url.scheme == "https" else "ws",
+                                      url.netloc, url.path + "/api/websocket", "", ""))
+        async with asyncio.timeout(20):
+            async with helper.connect(endpoint, proxy=None, open_timeout=8, close_timeout=2,
+                                      max_size=8 * 1024 * 1024, logger=helper.LOG) as ws:
+                if (await helper.receive(ws)).get("type") != "auth_required":
+                    raise InventoryUnavailable()
+                await ws.send(json.dumps({"type":"auth","access_token":settings["HA_TOKEN"]}))
+                if (await helper.receive(ws)).get("type") != "auth_ok":
+                    raise InventoryUnavailable()
+                yield helper, ws, settings
+
+    async def list_items(self, helper, ws, settings, number):
+        result = await helper.request(ws, number, "simple_inventory/list_items",
+                                      inventory_id=settings["SIW_INVENTORY_ID"])
+        if not isinstance(result, dict) or not isinstance(result.get("items"), list):
+            raise InventoryUnavailable()
+        return [row for row in result["items"] if isinstance(row, dict)]
+
     async def read(self):
         try:
-            helper = load_helper()
-            settings = helper.validate({key: os.environ.get(key, "") for key in helper.FIELDS})
-            url = helper.urlsplit(settings["HA_URL"])
-            endpoint = helper.urlunsplit(("wss" if url.scheme == "https" else "ws",
-                                          url.netloc, url.path + "/api/websocket", "", ""))
-            async with asyncio.timeout(15):
-                async with helper.connect(endpoint, proxy=None, open_timeout=8, close_timeout=2,
-                                          max_size=8 * 1024 * 1024, logger=helper.LOG) as ws:
-                    if (await helper.receive(ws)).get("type") != "auth_required":
-                        raise InventoryUnavailable()
-                    await ws.send(json.dumps({"type":"auth","access_token":settings["HA_TOKEN"]}))
-                    if (await helper.receive(ws)).get("type") != "auth_ok":
-                        raise InventoryUnavailable()
-                    states = await helper.request(ws, 1, "get_states")
-                    name = "Konfiguriertes Inventar"
-                    for state in states if isinstance(states, list) else []:
-                        attrs = state.get("attributes", {})
-                        if (attrs.get("inventory_id") == settings["SIW_INVENTORY_ID"]
-                                and "total_items" in attrs):
-                            name = str(attrs.get("friendly_name", name))
-                            break
-                    result = await helper.request(ws, 2, "simple_inventory/list_items",
-                                                  inventory_id=settings["SIW_INVENTORY_ID"])
-                    if not isinstance(result, dict) or not isinstance(result.get("items"), list):
-                        raise InventoryUnavailable()
-                    fields = ("name","quantity","unit","category","categories","location","locations")
-                    items = [{key: row[key] for key in fields if key in row}
-                             for row in result["items"] if isinstance(row, dict)]
-                    return {"name":name,"items":items}
+            async with self.connection() as (helper, ws, settings):
+                states = await helper.request(ws, 1, "get_states")
+                name = "Konfiguriertes Inventar"
+                for state in states if isinstance(states, list) else []:
+                    attrs = state.get("attributes", {})
+                    if attrs.get("inventory_id") == settings["SIW_INVENTORY_ID"] and "total_items" in attrs:
+                        name = str(attrs.get("friendly_name", name))
+                        break
+                rows = await self.list_items(helper, ws, settings, 2)
+                fields = ("name","quantity","unit","category","categories","location","locations")
+                return {"name":name, "items":[{key:row[key] for key in fields if key in row} for row in rows]}
         except Exception:
-            # Never expose HA URLs, tokens, server exception messages or tracebacks.
+            raise InventoryUnavailable() from None
+
+    async def write(self, fields, old_name=None, expected=None):
+        fields = validate_fields(fields)
+        dispatched = False
+        try:
+            async with self.connection() as (helper, ws, settings):
+                items = await self.list_items(helper, ws, settings, 1)
+                if old_name is not None:
+                    if fingerprint(exact_item(items, old_name)) != expected:
+                        raise WriteConflict()
+                for item in items:
+                    if item.get("name") == old_name:
+                        continue
+                    aliases = item.get("aliases")
+                    names = [item.get("name", "")] + (aliases if isinstance(aliases, list) else [])
+                    if any(str(name).strip().casefold() == fields["name"].casefold() for name in names):
+                        raise WriteConflict()
+                data = {"inventory_id":settings["SIW_INVENTORY_ID"], **fields}
+                if old_name is not None:
+                    data["old_name"] = old_name
+                dispatched = True
+                await helper.request(ws, 2, "call_service", domain="simple_inventory",
+                                     service="add_item" if old_name is None else "update_item",
+                                     service_data=data)
+                after = await self.list_items(helper, ws, settings, 3)
+                if fingerprint(exact_item(after, fields["name"])) != fingerprint(fields):
+                    raise WriteUncertain()
+        except (InvalidFields, WriteConflict):
+            if dispatched:
+                raise WriteUncertain() from None
+            raise
+        except Exception:
+            # Never retry a mutation: the service may already have saved it.
+            if dispatched:
+                raise WriteUncertain() from None
             raise InventoryUnavailable() from None
 
 PRIVATE_V4 = tuple(ipaddress.ip_network(net) for net in ("10.0.0.0/8","172.16.0.0/12","192.168.0.0/16"))
@@ -136,8 +228,12 @@ def create_app(client=None, policy=None, networks=None):
     client = client or InventoryClient()
     policy = policy if policy is not None else AccessPolicy.from_env()
     networks = networks if networks is not None else LocalNetworks()
-    session = URLSafeTimedSerializer(policy.signing_key or "disabled-mode", salt="siw-session")
-    csrf = URLSafeTimedSerializer(policy.signing_key or "disabled-mode", salt="siw-login")
+    signing = policy.signing_key or os.urandom(32).hex()
+    session = URLSafeTimedSerializer(signing, salt="siw-session")
+    csrf = URLSafeTimedSerializer(signing, salt="siw-login")
+    forms = URLSafeTimedSerializer(signing, salt="siw-items")
+    submitted = OrderedDict()
+    write_lock = asyncio.Lock()
     attempts = defaultdict(deque)
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -176,11 +272,94 @@ def create_app(client=None, policy=None, networks=None):
         try:
             data = await client.read()
             return TEMPLATES.TemplateResponse(request=request, name="index.html",
-                                              context={"inventory":data,"error":None})
+                                              context={"inventory":data,"error":None,
+                                                       "saved":request.query_params.get("saved") == "1"})
         except InventoryUnavailable:
             return TEMPLATES.TemplateResponse(request=request, name="index.html",
                 context={"inventory":None,"error":"Home Assistant oder das konfigurierte Inventar ist derzeit nicht erreichbar."},
                 status_code=503)
+
+    def item_form(request, values, action, old_name=None, expected=None):
+        binding = request.cookies.get("siw_forms", "")
+        if not re.fullmatch(r"[0-9a-f]{64}", binding):
+            binding = os.urandom(32).hex()
+        proof = forms.dumps({"action":action, "old_name":old_name, "expected":expected,
+                             "binding":hashlib.sha256(binding.encode()).hexdigest(),
+                             "nonce":os.urandom(16).hex()})
+        response = TEMPLATES.TemplateResponse(request=request, name="item.html",
+                                             context={"values":values,"action":action,"proof":proof})
+        response.set_cookie("siw_forms", binding, httponly=True, samesite="strict",
+                            secure=request.url.scheme == "https", max_age=3600)
+        return response
+
+    @app.get("/items/new", response_class=HTMLResponse)
+    async def new_item(request: Request):
+        return item_form(request, {"quantity":1}, "new")
+
+    @app.get("/items/edit", response_class=HTMLResponse)
+    async def edit_item(request: Request):
+        try:
+            inventory = await client.read()
+            item = exact_item(inventory["items"], request.query_params.get("item", ""))
+            return item_form(request, editable(item), "edit", item["name"], fingerprint(item))
+        except WriteConflict:
+            return HTMLResponse("Artikel nicht eindeutig vorhanden. Bitte Bestand neu laden.", status_code=409)
+        except InventoryUnavailable:
+            return HTMLResponse("Inventar derzeit nicht erreichbar.", status_code=503)
+
+    @app.post("/items/{action}")
+    async def save_item(action: str, request: Request):
+        if action not in {"new", "edit"}:
+            return HTMLResponse("Seite nicht gefunden.", status_code=404)
+        if request.headers.get("content-type", "").split(";")[0] != "application/x-www-form-urlencoded":
+            return HTMLResponse("Ungueltige Eingabe.", status_code=400)
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 16384:
+                return HTMLResponse("Eingabe zu gross.", status_code=413)
+        try:
+            raw = parse_qs(body.decode("utf-8"), max_num_fields=6, keep_blank_values=True)
+            if any(len(value) != 1 for value in raw.values()) or set(raw) - set(EDIT_FIELDS) - {"proof"}:
+                raise ValueError()
+            form = {key:value[0] for key,value in raw.items()}
+            claim = forms.loads(form.get("proof", ""), max_age=900)
+            binding = hashlib.sha256(request.cookies.get("siw_forms", "").encode()).hexdigest()
+            if (claim["action"] != action or not hmac.compare_digest(claim["binding"], binding)
+                    or not re.fullmatch(r"[0-9a-f]{32}", claim["nonce"])):
+                raise ValueError()
+            if action == "edit" and not isinstance(claim["old_name"], str):
+                raise ValueError()
+        except (ValueError, UnicodeError, BadSignature, KeyError, TypeError, AttributeError):
+            return HTMLResponse("Formular ungueltig oder abgelaufen. Bitte neu oeffnen.", status_code=400)
+        try:
+            fields = validate_fields(form)
+        except InvalidFields:
+            return HTMLResponse("Name und eine Menge von 0 bis 1000000000 angeben (max. 6 Nachkommastellen). "
+                                "Textfelder duerfen keine Steuerzeichen enthalten. Mit Zurueck korrigieren.",
+                                status_code=422)
+        async with write_lock:
+            now = time.monotonic()
+            while submitted and next(iter(submitted.values())) < now - 1800:
+                submitted.popitem(last=False)
+            nonce = claim["nonce"]
+            if nonce in submitted:
+                return HTMLResponse("Dieses Formular wurde bereits abgesendet. Bitte Bestand neu laden.",
+                                    status_code=409)
+            if len(submitted) >= 1000:
+                return HTMLResponse("Bitte spaeter erneut versuchen.", status_code=429)
+            submitted[nonce] = now
+            try:
+                await client.write(fields, old_name=claim["old_name"], expected=claim["expected"])
+            except WriteConflict:
+                return HTMLResponse("Artikel bereits vorhanden oder zwischenzeitlich geaendert. "
+                                    "Bitte Bestand neu laden und das Formular erneut oeffnen.", status_code=409)
+            except InventoryUnavailable:
+                return HTMLResponse("Home Assistant nicht erreichbar. Bitte Verbindung pruefen.", status_code=503)
+            except WriteUncertain:
+                return HTMLResponse("Speicherung nicht bestaetigt. Bitte zuerst den Bestand pruefen, "
+                                    "bevor du erneut speicherst.", status_code=502)
+        return RedirectResponse("/?saved=1", status_code=303)
 
     @app.get("/api/inventory")
     async def inventory_api():

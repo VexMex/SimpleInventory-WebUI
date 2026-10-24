@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="de">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Artikel | SimpleInventory</title></head>
+<body>
+<h1>Artikel {% if action == 'new' %}hinzufügen{% else %}bearbeiten{% endif %}</h1>
+<form action="/items/{{ action }}" method="post">
+<input type="hidden" name="proof" value="{{ proof }}">
+<p><label>Name <input name="name" value="{{ values.get('name', '') }}" maxlength="200" required></label></p>
+<p><label>Menge <input name="quantity" value="{{ values.get('quantity', '') }}" inputmode="decimal" required></label></p>
+<p><label>Einheit <input name="unit" value="{{ values.get('unit', '') }}" maxlength="40"></label></p>
+<p><label>Gruppe <input name="category" value="{{ values.get('category', '') }}" maxlength="500"></label></p>
+<p><label>Standort <input name="location" value="{{ values.get('location', '') }}" maxlength="500"></label></p>
+<p>Mehrere Gruppen oder Standorte mit Komma trennen.</p>
+<button type="submit">Speichern</button> <a href="/">Abbrechen</a>
+</form>
+</body></html>
