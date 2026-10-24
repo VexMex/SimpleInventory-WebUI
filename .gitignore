@@ -1,0 +1,28 @@
+# Runtime credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+secrets/
+private/
+config.local.*
+*.log
+logs/
+backups/
+exports/
+*.sqlite*
+*.db
+# Python and editor files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.vscode/
+.idea/
