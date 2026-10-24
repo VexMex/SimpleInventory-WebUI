@@ -1,12 +1,12 @@
 # SimpleInventory-WebUI
 
-Current baseline: **0.1.0**. See [changelog](CHANGELOG.md) and [version recovery notes](docs/versioning.md).
+Current development: **0.2.0-dev**, first read-only WebUI. Saved baseline: **0.1.0**. See [changelog](CHANGELOG.md) and [version recovery notes](docs/versioning.md).
 
 A planned Python web interface for the Simple Inventory integration in Home Assistant.
 
 ## Current state
 
-This repository currently contains the installation foundation and credential policy, not a working WebUI. Existing LICENSE is retained. No Home Assistant instance has been configured, and no LXC is created by this installer.
+This repository now contains the first functional read-only WebUI, installation scripts and credential policy. Existing LICENSE is retained. Private HA settings are configured manually after installation.
 
 ## Intended architecture
 
@@ -37,19 +37,19 @@ The host needs curl, normally available on Proxmox. Review install.sh before run
 
 The installer asks for container ID, hostname, disk storage, template storage, bridge, CPU, memory and disk size, then asks for confirmation. Enter accepts the suggested value. Defaults: a free ID, Debian 13 amd64, unprivileged, 1 core, 1 GB RAM, 4 GB disk, DHCP. Nesting is enabled for systemd 257 compatibility. No GPU or Docker is required. Automatic startup on host boot is disabled for this development foundation.
 
-It downloads the Debian template when needed, creates a NEW LXC, starts it and installs Python dependencies. Existing guests are never reused or deleted. On failure a new guest is retained for diagnosis. Cancelling creates no guest.
+It downloads the Debian template when needed, creates a NEW LXC, starts it, installs dependencies and enables the read-only WebUI on HTTP port 80. Existing guests are never reused or deleted. On failure a new guest is retained for diagnosis. Cancelling creates no guest.
 
 The guest bootstrap is pinned to a reviewed revision and SHA-256 checksum. The entry script on main can change; Python dependencies still use development ranges. A production release requires full dependency locking.
 
 For automated tests, SIW_NONINTERACTIVE=1 skips prompts. SIW_CTID, SIW_HOSTNAME, SIW_STORAGE, SIW_TEMPLATE_STORAGE, SIW_BRIDGE, SIW_CORES, SIW_MEMORY and SIW_DISK override defaults. Existing IDs are rejected. Credentials are never installer arguments.
 
-**Current result:** a prepared Python environment and a manual HA setup command, not a running WebUI. No HA token is requested by the installer. After creation, run `/usr/local/bin/simpleinventory-setup` inside the LXC; see [HA setup](docs/ha-setup.md). The host installer is self-contained; it follows the host/guest split without sourcing changing Community Scripts helper libraries.
+**Current result:** a read-only WebUI on HTTP port 80 plus manual HA setup. No HA token is requested by the installer. After creation, run `/usr/local/bin/simpleinventory-setup` inside the LXC; see [HA setup](docs/ha-setup.md). The host installer is self-contained; it follows the host/guest split without sourcing changing Community Scripts helper libraries.
 
 See [guest bootstrap test](docs/bootstrap-test.md).
 
 ## Credentials
 
-Read SECURITY.md and AGENTS.md before changing or uploading anything. Real credentials never belong on GitHub. The user permits local runtime storage in the installation LXC: /etc/simpleinventory-webui/app.env, outside the source tree, owned by root with mode 0600. Manual HA token configuration and a boot-time connection check are implemented; the application login and WebUI still need implementation.
+Read SECURITY.md and AGENTS.md before changing or uploading anything. Real credentials never belong on GitHub. The user permits local runtime storage in the installation LXC: /etc/simpleinventory-webui/app.env, outside the source tree, owned by root with mode 0600. Manual HA token configuration, a boot-time connection check and the read-only WebUI are implemented. Optional shared-password authentication is prepared but disabled by default.
 
 References:
 - https://github.com/blaineventurine/simple_inventory
@@ -62,3 +62,9 @@ References:
 The installer sets the Proxmox console mode to shell. Opening Console in the Proxmox web interface starts a root shell directly, without a guest username/password prompt. Access is controlled by Proxmox authentication and console permissions. This does not set an empty root password or enable passwordless SSH. The container remains unprivileged.
 
 Run /usr/local/bin/simpleinventory-setup from that console to configure HA manually.
+
+## First WebUI
+
+Open the LXC IPv4 address or a DNS name pointing to it in a browser using HTTP. Port 80 needs no explicit suffix. The page displays the configured inventory and item name, quantity, unit, category and location. Refresh the page to reload HA values. There are no inventory write operations yet.
+
+See [WebUI configuration and access policy](docs/webui.md). Existing private HA settings are preserved on deployment. Running the HA setup helper again restarts the web service so it reloads the saved settings.

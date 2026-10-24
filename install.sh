@@ -5,10 +5,11 @@ CT_CREATED=0
 BOOTSTRAP_FILE=
 SETUP_FILE=
 SERVICE_FILE=
+WEB_FILE=
 CTID=
 cleanup() {
   local file
-  for file in "$BOOTSTRAP_FILE" "$SETUP_FILE" "$SERVICE_FILE"; do
+  for file in "$BOOTSTRAP_FILE" "$SETUP_FILE" "$SERVICE_FILE" "$WEB_FILE"; do
     if [[ -n "$file" && -f "$file" ]]; then rm -f -- "$file"; fi
   done
 }
@@ -29,9 +30,11 @@ done
 # Immutable, reviewed guest bootstrap and its checksum.
 BOOTSTRAP_REV=c11eecb5e867f0841e5bde1fa1c6d8702a8ecbec
 BOOTSTRAP_SHA=5bcd879eee26b79a91b44517fb514a733c1abb9bc43438d1043a58842e7dae8f
-SETUP_REV=7574853feb539b5aae91583a5840b3e1d797525a
-SETUP_SHA=a01949221a3001938aa7699b2c95f26fdefa0c1342d2d10257b172b64e6e94ac
+SETUP_REV=71ed59f38359c4f78ef8ae1183968be035346aed
+SETUP_SHA=546e2554a858198fa25c2f142c26e4e5c2928148ff141b15ad2b00cb9f251e53
 SERVICE_SHA=bfa927b38b5bd2e3670ce020860bbaa341c83e790fe2f522133ca54189477403
+WEB_REV=de632fea836a6da8f1ed08d1f3dfe2ce01a2407b
+WEB_SHA=523f137dc5a3c7df61e98b84031ebcc66a9b4c1c09373e7724d18fd95371b92c
 REPOSITORY=https://raw.githubusercontent.com/VexMex/SimpleInventory-WebUI
 storage_available() {
   pvesm status --content "$2" | awk -v wanted="$1" 'NR>1 && $1==wanted && $3=="active" {found=1} END {exit !found}'
@@ -62,7 +65,7 @@ prompt() {
   if [[ -n "$answer" ]]; then printf -v "$name" '%s' "$answer"; fi
 }
 printf '\nSimpleInventory-WebUI - Proxmox LXC setup\n'
-printf 'Current scope: Python foundation; the WebUI is not implemented yet.\n'
+printf 'Current scope: read-only WebUI and manual HA connection setup.\n'
 if [[ "$NONINTERACTIVE" == 0 ]]; then
   [[ -r /dev/tty && -w /dev/tty ]] || die 'Interactive terminal required.'
   prompt CTID 'Container ID'
@@ -109,6 +112,11 @@ curl -fsSL --retry 3 --connect-timeout 15 --max-time 120 \
   "$REPOSITORY/$SETUP_REV/install/simpleinventory-ha-check.service" -o "$SERVICE_FILE"
 printf '%s  %s\n' "$SETUP_SHA" "$SETUP_FILE" | sha256sum -c -
 printf '%s  %s\n' "$SERVICE_SHA" "$SERVICE_FILE" | sha256sum -c -
+WEB_FILE=$(mktemp /tmp/simpleinventory-web.XXXXXXXX.sh)
+curl -fsSL --retry 3 --connect-timeout 15 --max-time 120 \
+  "$REPOSITORY/$WEB_REV/install/webui-install.sh" -o "$WEB_FILE"
+printf '%s  %s\n' "$WEB_SHA" "$WEB_FILE" | sha256sum -c -
+bash -n "$WEB_FILE"
 pveam update
 TEMPLATE=$(pveam available --section system | awk '$2 ~ /^debian-13-standard_.*_amd64\.tar\.zst$/ {print $2}' | sort -V | tail -n 1)
 [[ -n "$TEMPLATE" ]] || die 'No Debian 13 amd64 template found.'
@@ -139,8 +147,11 @@ pct push "$CTID" "$SERVICE_FILE" /etc/systemd/system/simpleinventory-ha-check.se
 pct exec "$CTID" -- ln -s /opt/simpleinventory-webui/setup-ha.py /usr/local/bin/simpleinventory-setup
 pct exec "$CTID" -- systemctl daemon-reload
 pct exec "$CTID" -- systemctl enable simpleinventory-ha-check.service
+pct push "$CTID" "$WEB_FILE" /root/simpleinventory-webui-install.sh --perms 0700
+pct exec "$CTID" -- env LC_ALL=C.UTF-8 bash /root/simpleinventory-webui-install.sh
 printf '\nSUCCESS: LXC %s (%s) is prepared.\n' "$CTID" "$CT_NAME"
 pct exec "$CTID" -- ip -4 -brief address show eth0
+printf 'WebUI: open the LXC IPv4 address in a browser (HTTP port 80).\n'
 printf 'Python: /opt/simpleinventory-webui/venv\n'
 printf 'Next: run /usr/local/bin/simpleinventory-setup manually as root INSIDE the LXC.\n'
 printf 'No HA credentials are requested during this installation.\n'
