@@ -41,13 +41,13 @@ The guest bootstrap is pinned to a reviewed revision and SHA-256 checksum. The e
 
 For automated tests, SIW_NONINTERACTIVE=1 skips prompts. SIW_CTID, SIW_HOSTNAME, SIW_STORAGE, SIW_TEMPLATE_STORAGE, SIW_BRIDGE, SIW_CORES, SIW_MEMORY and SIW_DISK override defaults. Existing IDs are rejected. Credentials are never installer arguments.
 
-**Current result:** a prepared Python environment, not a running WebUI. No HA token is requested. The host installer is self-contained; it follows the host/guest split without sourcing changing Community Scripts helper libraries.
+**Current result:** a prepared Python environment and a manual HA setup command, not a running WebUI. No HA token is requested by the installer. After creation, run `/usr/local/bin/simpleinventory-setup` inside the LXC; see [HA setup](docs/ha-setup.md). The host installer is self-contained; it follows the host/guest split without sourcing changing Community Scripts helper libraries.
 
 See [guest bootstrap test](docs/bootstrap-test.md).
 
 ## Credentials
 
-Read SECURITY.md and AGENTS.md before changing or uploading anything. Real credentials never belong on GitHub. The user permits local runtime storage in the installation LXC: /etc/simpleinventory-webui/app.env, outside the source tree, owned by root with mode 0600. Configuration and login functionality still need implementation.
+Read SECURITY.md and AGENTS.md before changing or uploading anything. Real credentials never belong on GitHub. The user permits local runtime storage in the installation LXC: /etc/simpleinventory-webui/app.env, outside the source tree, owned by root with mode 0600. Manual HA token configuration and a boot-time connection check are implemented; the application login and WebUI still need implementation.
 
 References:
 - https://github.com/blaineventurine/simple_inventory

@@ -3,9 +3,14 @@
 set -Eeuo pipefail
 CT_CREATED=0
 BOOTSTRAP_FILE=
+SETUP_FILE=
+SERVICE_FILE=
 CTID=
 cleanup() {
-  if [[ -n "$BOOTSTRAP_FILE" && -f "$BOOTSTRAP_FILE" ]]; then rm -f -- "$BOOTSTRAP_FILE"; fi
+  local file
+  for file in "$BOOTSTRAP_FILE" "$SETUP_FILE" "$SERVICE_FILE"; do
+    if [[ -n "$file" && -f "$file" ]]; then rm -f -- "$file"; fi
+  done
 }
 failed() {
   printf '\nInstallation failed at line %s.\n' "$1" >&2
@@ -24,6 +29,9 @@ done
 # Immutable, reviewed guest bootstrap and its checksum.
 BOOTSTRAP_REV=c11eecb5e867f0841e5bde1fa1c6d8702a8ecbec
 BOOTSTRAP_SHA=5bcd879eee26b79a91b44517fb514a733c1abb9bc43438d1043a58842e7dae8f
+SETUP_REV=7574853feb539b5aae91583a5840b3e1d797525a
+SETUP_SHA=a01949221a3001938aa7699b2c95f26fdefa0c1342d2d10257b172b64e6e94ac
+SERVICE_SHA=bfa927b38b5bd2e3670ce020860bbaa341c83e790fe2f522133ca54189477403
 REPOSITORY=https://raw.githubusercontent.com/VexMex/SimpleInventory-WebUI
 storage_available() {
   pvesm status --content "$2" | awk -v wanted="$1" 'NR>1 && $1==wanted && $3=="active" {found=1} END {exit !found}'
@@ -92,6 +100,14 @@ curl -fsSL --retry 3 --connect-timeout 15 --max-time 120 \
   "$REPOSITORY/$BOOTSTRAP_REV/install/bootstrap-lxc.sh" -o "$BOOTSTRAP_FILE"
 printf '%s  %s\n' "$BOOTSTRAP_SHA" "$BOOTSTRAP_FILE" | sha256sum -c -
 bash -n "$BOOTSTRAP_FILE"
+SETUP_FILE=$(mktemp /tmp/simpleinventory-setup.XXXXXXXX.py)
+SERVICE_FILE=$(mktemp /tmp/simpleinventory-service.XXXXXXXX.service)
+curl -fsSL --retry 3 --connect-timeout 15 --max-time 120 \
+  "$REPOSITORY/$SETUP_REV/scripts/setup_ha.py" -o "$SETUP_FILE"
+curl -fsSL --retry 3 --connect-timeout 15 --max-time 120 \
+  "$REPOSITORY/$SETUP_REV/install/simpleinventory-ha-check.service" -o "$SERVICE_FILE"
+printf '%s  %s\n' "$SETUP_SHA" "$SETUP_FILE" | sha256sum -c -
+printf '%s  %s\n' "$SERVICE_SHA" "$SERVICE_FILE" | sha256sum -c -
 pveam update
 TEMPLATE=$(pveam available --section system | awk '$2 ~ /^debian-13-standard_.*_amd64\.tar\.zst$/ {print $2}' | sort -V | tail -n 1)
 [[ -n "$TEMPLATE" ]] || die 'No Debian 13 amd64 template found.'
@@ -117,8 +133,14 @@ for ((attempt=0; attempt<60; attempt++)); do
 done
 [[ "$ready" == 1 ]] || die "LXC $CTID has no working DHCP/DNS after 120 seconds."
 pct exec "$CTID" -- env LC_ALL=C.UTF-8 bash /root/simpleinventory-bootstrap.sh
+pct push "$CTID" "$SETUP_FILE" /opt/simpleinventory-webui/setup-ha.py --perms 0755
+pct push "$CTID" "$SERVICE_FILE" /etc/systemd/system/simpleinventory-ha-check.service --perms 0644
+pct exec "$CTID" -- ln -s /opt/simpleinventory-webui/setup-ha.py /usr/local/bin/simpleinventory-setup
+pct exec "$CTID" -- systemctl daemon-reload
+pct exec "$CTID" -- systemctl enable simpleinventory-ha-check.service
 printf '\nSUCCESS: LXC %s (%s) is prepared.\n' "$CTID" "$CT_NAME"
 pct exec "$CTID" -- ip -4 -brief address show eth0
 printf 'Python: /opt/simpleinventory-webui/venv\n'
-printf 'No WebUI service or HA credentials are configured yet.\n'
+printf 'Next: run /usr/local/bin/simpleinventory-setup manually as root INSIDE the LXC.\n'
+printf 'No HA credentials are requested during this installation.\n'
 # end
