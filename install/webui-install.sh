@@ -4,7 +4,7 @@ set -Eeuo pipefail
 [[ "$EUID" == 0 ]] || { echo 'Run as root inside the LXC.' >&2; exit 1; }
 [[ "$(systemd-detect-virt --container 2>/dev/null || true)" == lxc ]] || { echo 'Expected an LXC.' >&2; exit 1; }
 APP_ROOT=/opt/simpleinventory-webui
-REF=16fef51a212344ca234950bf70e5b3644333915e
+REF=37d0540edff6e68328efd47908cf368ab3755afc
 BASE=https://raw.githubusercontent.com/VexMex/SimpleInventory-WebUI
 [[ -x "$APP_ROOT/venv/bin/python" ]] || { echo 'Run the dependency bootstrap first.' >&2; exit 1; }
 stage=$(mktemp -d /tmp/simpleinventory-webui.XXXXXXXX)
@@ -18,9 +18,9 @@ fetch() {
   printf '%s  %s\n' "$3" "$stage/$2" | sha256sum -c -
 }
 fetch webui/__init__.py __init__.py e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-fetch webui/web.py web.py f76f0a592ca81ef4a1a04b4211484fb62096775ff643e0dfeda14bd562ddbcb0
-fetch webui/templates/index.html index.html 0df4b9aa584f6c03dfeab074ea7277359c40220aa44ea3325208c1bf3acf50ec
-fetch webui/templates/item.html item.html 2ea284881a9ea56c8e5373d3c0d85c062956f8c2b1924d0a52d1307d363ae7a2
+fetch webui/web.py web.py 62fbaee5f21199970d60f9ad3726c1f43ffece6ba3946d4e9f86179947e374b7
+fetch webui/templates/index.html index.html a9ff90b139420fbcf02ffd8103c8e937c04b0bbc13d391d862f49b04009cd3d1
+fetch webui/templates/item.html item.html 493a4a5559d39ebcde4c6a36d6c4dc41e50d4328445cdbcf69cc6a7d0a03f672
 fetch webui/templates/login.html login.html c0005cad267992ec0a0072e54b14ee35317abd781786b653cfe131cc474c0954
 fetch install/simpleinventory-web.service web.service 8e04b8b821475b24718e03f771425bb698a6ca65eed7350cbb15d6d19605005e
 fetch scripts/setup_ha.py setup-ha.py 546e2554a858198fa25c2f142c26e4e5c2928148ff141b15ad2b00cb9f251e53
