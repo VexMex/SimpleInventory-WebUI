@@ -1,23 +1,19 @@
 # Changelog
 
-## 0.3.0-dev - Unreleased
+## 0.3.0 - 2026-10-24
 
-- Discover existing inventories, select the alphabetically first by default and offer a dropdown to switch.
-- Keep selections in the URL and bind item writes to their original inventory across browser tabs.
-- Remove the fixed inventory selection from HA setup; accept existing configuration without rewriting credentials.
-- Keep inventory administration in Home Assistant.
+Functional WebUI baseline for the agreed initial feature scope.
 
-- Add editable unit dropdown suggestions and default new items to `stück`.
-- Add a numeric value-per-unit field backed by HA `price`, with euro formatting in the overview.
-
-- Offer existing groups and locations as editable dropdown suggestions on create and edit forms; new typed values are saved with the item.
-
-- Add and edit items through the WebUI: name, quantity, unit, category and location.
-- Save changes directly to the configured Home Assistant inventory without a separate database.
-- Add signed forms, duplicate-submission protection and checks for stale edits and duplicate names.
-- Verify writes by reading saved values; uncertain results are never retried automatically.
-- Update the pinned LXC installer and preserve private runtime settings.
-- Pass 50 automated tests and a real create/edit/rename test with temporary-item cleanup.
+- Create and edit items: name, quantity, unit, value per unit, group and location.
+- Offer editable dropdown suggestions for units, groups and locations; save new typed values with the item.
+- Default new items to the unit `stück` and display euro values in the overview.
+- Discover existing inventories, select the alphabetically first by default and switch using a dropdown.
+- Keep selections in the URL and bind item forms to their original inventory across browser tabs.
+- Simplify HA setup by removing fixed inventory selection; retain compatibility with existing local settings.
+- Save through HA without a separate database; leave inventory administration in Home Assistant.
+- Protect saves with signed forms, duplicate-submission and stale-edit checks, duplicate-name checks and post-save verification.
+- Update the pinned installer while preserving private runtime settings.
+- Validate with 50 automated tests, live item create/edit/rename tests and real HA discovery and connection checks.
 
 ## 0.2.0 - 2026-10-24
 

@@ -1,6 +1,6 @@
 # SimpleInventory-WebUI
 
-Current development: **0.3.0-dev**, WebUI with item creation and editing. Saved baseline: **0.1.0**. See [changelog](CHANGELOG.md) and [version recovery notes](docs/versioning.md).
+Current version: **0.3.0**, functional WebUI with inventory selection, item creation and editing. Saved baseline: **0.1.0**. See [changelog](CHANGELOG.md) and [version recovery notes](docs/versioning.md).
 
 A Python web interface for the Simple Inventory integration in Home Assistant.
 
@@ -8,7 +8,7 @@ A Python web interface for the Simple Inventory integration in Home Assistant.
 
 This repository now contains the functional WebUI, installation scripts and credential policy. Existing LICENSE is retained. Private HA settings are configured manually after installation.
 
-## Intended architecture
+## Architecture
 
 Browser -> Python FastAPI application -> authenticated Home Assistant WebSocket API -> Simple Inventory.
 Home Assistant remains the source of truth; no separate inventory database is required. The application depends on HA being available.
@@ -23,7 +23,7 @@ Home Assistant remains the source of truth; no separate inventory database is re
 - itsdangerous: signed sessions and expiring forms with CSRF protection.
 - systemd (provided by the Debian container): service startup and restart.
 
-Planned UI extensions include additional inventory selection, search/filter, quantity buttons and deletion. Original target scope: list inventories; search/filter items by category and location; create/edit items; increment/decrement quantities; confirm deletion; display successful or failed saves. The backend must reconcile uncertain write results instead of blindly retrying.
+The v0.3.0 feature scope includes selecting existing inventories, displaying items, creating and editing items, editable suggestions for units/groups/locations, and euro values. Inventory administration stays in Home Assistant. Uncertain write results are reported without automatic retries.
 
 ## One-command Proxmox installation
 
