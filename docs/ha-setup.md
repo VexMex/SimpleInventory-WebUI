@@ -1,6 +1,6 @@
 # Manual Home Assistant connection
 
-After LXC creation, open its console as root and run:
+After LXC creation, open Console in the Proxmox web interface. The installer configures a direct root shell (console mode shell), so no guest login password is needed. Run:
 
 ```bash
 /usr/local/bin/simpleinventory-setup

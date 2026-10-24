@@ -54,3 +54,9 @@ References:
 - https://github.com/community-scripts/ProxmoxVE/blob/main/ct/homebox.sh
 - https://github.com/community-scripts/ProxmoxVE/blob/main/install/homebox-install.sh
 - https://fastapi.tiangolo.com/
+
+## Opening the LXC console
+
+The installer sets the Proxmox console mode to shell. Opening Console in the Proxmox web interface starts a root shell directly, without a guest username/password prompt. Access is controlled by Proxmox authentication and console permissions. This does not set an empty root password or enable passwordless SSH. The container remains unprivileged.
+
+Run /usr/local/bin/simpleinventory-setup from that console to configure HA manually.

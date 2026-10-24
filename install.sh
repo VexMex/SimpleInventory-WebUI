@@ -88,6 +88,7 @@ ip -o link show type bridge | awk -F': ' -v b="$BRIDGE" '$2==b {found=1} END {ex
 pvesh get /cluster/nextid --vmid "$CTID" >/dev/null
 printf '\nNew LXC %s (%s): Debian 13, unprivileged, nesting enabled.\n' "$CTID" "$CT_NAME"
 printf '%s core(s), %s MB RAM, %s GB disk on %s; DHCP on %s.\n' "$CORES" "$MEMORY" "$DISK" "$ROOT_STORAGE" "$BRIDGE"
+printf 'PVE console: direct root shell; no guest password required.\n'
 printf 'Automatic host-boot startup: disabled.\n'
 if [[ "$NONINTERACTIVE" == 0 ]]; then
   read -r -p 'Create this LXC and install dependencies? [y/N]: ' answer </dev/tty
@@ -116,7 +117,7 @@ if ! pveam list "$TEMPLATE_STORAGE" | awk -v name="$TEMPLATE_STORAGE:vztmpl/$TEM
 fi
 pvesh get /cluster/nextid --vmid "$CTID" >/dev/null
 pct create "$CTID" "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE" \
-  --hostname "$CT_NAME" --ostype debian --unprivileged 1 --features nesting=1 \
+  --hostname "$CT_NAME" --ostype debian --unprivileged 1 --features nesting=1 --cmode shell \
   --cores "$CORES" --memory "$MEMORY" --swap 256 --rootfs "$ROOT_STORAGE:$DISK" \
   --net0 "name=eth0,bridge=$BRIDGE,ip=dhcp,type=veth,firewall=1" \
   --onboot 0 --description 'SimpleInventory-WebUI dependency foundation; HA not configured'
