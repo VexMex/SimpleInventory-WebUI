@@ -25,24 +25,31 @@ Initial UI scope: list inventories; search/filter items by category and location
 
 ## Proxmox foundation
 
-Suggested starting allocation (not a benchmark): unprivileged Debian 13 LXC, 1 vCPU, 512 MB to 1 GB RAM, 4 GB disk; DHCP initially. Debian 12 is also accepted. No Docker nesting or privileged container is needed.
+Suggested starting allocation (not a benchmark): unprivileged Debian 13 LXC, 1 vCPU, 1 GB RAM, 4 GB disk; DHCP initially. Debian 12 is also accepted but has not been tested here.
+
+On the tested Proxmox/Debian 13 combination, systemd 257 required the Proxmox LXC feature nesting=1. Without it, tmp.mount, run-lock.mount and dev-mqueue.mount failed. Enabling nesting and restarting the new container resolved all three failures. This application does not require Docker, GPU passthrough or a privileged container.
 
 The Community Scripts pattern separates host-side container creation from inside-container application installation. install/bootstrap-lxc.sh implements only the second part for dependency preparation and deliberately refuses the Proxmox host.
 
-Repository is currently private. An anonymous raw GitHub curl command will not work. Do not publish the repository or put a GitHub token into a command just to install it.
+The repository is public. No GitHub login or token is needed for installation. Run the following as root INSIDE an existing target Debian LXC:
 
-1. Download install/bootstrap-lxc.sh from GitHub using your authenticated browser on your own computer.
-2. Copy the script to the Proxmox host, then transfer it to an existing target LXC using pct push.
-3. In the Proxmox host shell, replace 123 with the actual target CT ID:
+```bash
+revision=c11eecb5e867f0841e5bde1fa1c6d8702a8ecbec
+apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && curl -fsSL --retry 3 --connect-timeout 15 \
+     "https://raw.githubusercontent.com/VexMex/SimpleInventory-WebUI/${revision}/install/bootstrap-lxc.sh" \
+     -o /root/simpleinventory-bootstrap.sh \
+  && bash /root/simpleinventory-bootstrap.sh
+```
 
-    pct push 123 /root/bootstrap-lxc.sh /root/bootstrap-lxc.sh
-    pct exec 123 -- bash /root/bootstrap-lxc.sh
+The URL pins the tested installer revision. A fresh Debian template may not contain curl, so its installation comes first. For controlled upgrades, review and select a newer revision rather than silently executing a changing branch.
 
-Alternatively paste the script into the target container console and run it there as root.
+The bootstrap installs Python, an isolated virtual environment and the intended Python dependencies. It does not create an LXC, install a database, run a full OS upgrade, change firewall rules, request credentials or start an application service. Re-running may resolve newer Python package versions within the initial development constraints; package versions and hashes must be locked before a production deployment.
 
-It installs Python, an isolated virtual environment and the intended Python dependencies. It does not install a database, run an OS upgrade, change firewall rules, request credentials or start a service. Re-running validates the environment and may resolve newer package versions within the initial development constraints. Before a production deployment, dependency versions and hashes must be locked and tested.
+Test results: [Debian 13 LXC bootstrap](docs/bootstrap-test.md).
 
-For a future public release, a host-side LXC creator and version-pinned application installer can provide a one-command flow. They are not implemented yet. Private release delivery will need an authenticated download on the user's PC or another explicitly approved approach.
+A future host-side LXC creator and application installer can provide a complete one-command flow. They are not implemented yet.
 
 ## Credentials
 
