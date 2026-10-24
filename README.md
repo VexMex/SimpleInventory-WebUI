@@ -23,33 +23,27 @@ Home Assistant remains the source of truth; no separate inventory database is re
 
 Initial UI scope: list inventories; search/filter items by category and location; create/edit items; increment/decrement quantities; confirm deletion; display successful or failed saves. The backend must reconcile uncertain write results instead of blindly retrying.
 
-## Proxmox foundation
+## One-command Proxmox installation
 
-Suggested starting allocation (not a benchmark): unprivileged Debian 13 LXC, 1 vCPU, 1 GB RAM, 4 GB disk; DHCP initially. Debian 12 is also accepted but has not been tested here.
-
-On the tested Proxmox/Debian 13 combination, systemd 257 required the Proxmox LXC feature nesting=1. Without it, tmp.mount, run-lock.mount and dev-mqueue.mount failed. Enabling nesting and restarting the new container resolved all three failures. This application does not require Docker, GPU passthrough or a privileged container.
-
-The Community Scripts pattern separates host-side container creation from inside-container application installation. install/bootstrap-lxc.sh implements only the second part for dependency preparation and deliberately refuses the Proxmox host.
-
-The repository is public. No GitHub login or token is needed for installation. Run the following as root INSIDE an existing target Debian LXC:
+Run as root in the **Proxmox host shell**:
 
 ```bash
-revision=c11eecb5e867f0841e5bde1fa1c6d8702a8ecbec
-apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl \
-  && curl -fsSL --retry 3 --connect-timeout 15 \
-     "https://raw.githubusercontent.com/VexMex/SimpleInventory-WebUI/${revision}/install/bootstrap-lxc.sh" \
-     -o /root/simpleinventory-bootstrap.sh \
-  && bash /root/simpleinventory-bootstrap.sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/VexMex/SimpleInventory-WebUI/main/install.sh)"
 ```
 
-The URL pins the tested installer revision. A fresh Debian template may not contain curl, so its installation comes first. For controlled upgrades, review and select a newer revision rather than silently executing a changing branch.
+The host needs curl, normally available on Proxmox. Review install.sh before running it. A download failure must not be mistaken for success: a setup banner and prompts must appear. The short launcher follows the Community Scripts invocation style.
 
-The bootstrap installs Python, an isolated virtual environment and the intended Python dependencies. It does not create an LXC, install a database, run a full OS upgrade, change firewall rules, request credentials or start an application service. Re-running may resolve newer Python package versions within the initial development constraints; package versions and hashes must be locked before a production deployment.
+The installer asks for container ID, hostname, disk storage, template storage, bridge, CPU, memory and disk size, then asks for confirmation. Enter accepts the suggested value. Defaults: a free ID, Debian 13 amd64, unprivileged, 1 core, 1 GB RAM, 4 GB disk, DHCP. Nesting is enabled for systemd 257 compatibility. No GPU or Docker is required. Automatic startup on host boot is disabled for this development foundation.
 
-Test results: [Debian 13 LXC bootstrap](docs/bootstrap-test.md).
+It downloads the Debian template when needed, creates a NEW LXC, starts it and installs Python dependencies. Existing guests are never reused or deleted. On failure a new guest is retained for diagnosis. Cancelling creates no guest.
 
-A future host-side LXC creator and application installer can provide a complete one-command flow. They are not implemented yet.
+The guest bootstrap is pinned to a reviewed revision and SHA-256 checksum. The entry script on main can change; Python dependencies still use development ranges. A production release requires full dependency locking.
+
+For automated tests, SIW_NONINTERACTIVE=1 skips prompts. SIW_CTID, SIW_HOSTNAME, SIW_STORAGE, SIW_TEMPLATE_STORAGE, SIW_BRIDGE, SIW_CORES, SIW_MEMORY and SIW_DISK override defaults. Existing IDs are rejected. Credentials are never installer arguments.
+
+**Current result:** a prepared Python environment, not a running WebUI. No HA token is requested. The host installer is self-contained; it follows the host/guest split without sourcing changing Community Scripts helper libraries.
+
+See [guest bootstrap test](docs/bootstrap-test.md).
 
 ## Credentials
 
