@@ -15,7 +15,7 @@ from pathlib import Path
 import re
 import subprocess
 import time
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlencode
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -45,6 +45,9 @@ def load_helper():
     return module
 
 class InventoryUnavailable(Exception):
+    pass
+
+class InventoryNotFound(InventoryUnavailable):
     pass
 
 class WriteConflict(Exception):
@@ -149,28 +152,45 @@ class InventoryClient:
             raise InventoryUnavailable()
         return [row for row in result["items"] if isinstance(row, dict)]
 
-    async def read(self):
+    async def available(self, helper, ws):
+        states = await helper.request(ws, 1, "get_states")
+        return [{"id":key,"name":name} for key,name in helper.inventories_from_states(states)]
+
+    def select(self, inventories, inventory_id):
+        if inventory_id is None:
+            if not inventories:
+                raise InventoryNotFound()
+            return inventories[0]
+        matches = [row for row in inventories if row["id"] == inventory_id]
+        if not matches:
+            raise InventoryNotFound()
+        return matches[0]
+
+    async def read(self, inventory_id=None):
         try:
             async with self.connection() as (helper, ws, settings):
-                states = await helper.request(ws, 1, "get_states")
-                name = "Konfiguriertes Inventar"
-                for state in states if isinstance(states, list) else []:
-                    attrs = state.get("attributes", {})
-                    if attrs.get("inventory_id") == settings["SIW_INVENTORY_ID"] and "total_items" in attrs:
-                        name = str(attrs.get("friendly_name", name))
-                        break
+                inventories = await self.available(helper, ws)
+                if not inventories and inventory_id is None:
+                    return {"id":None,"name":"","items":[],"inventories":[]}
+                selected = self.select(inventories, inventory_id)
+                settings["SIW_INVENTORY_ID"] = selected["id"]
                 rows = await self.list_items(helper, ws, settings, 2)
                 fields = ("name","quantity","unit","category","categories","location","locations","price")
-                return {"name":name, "items":[{key:row[key] for key in fields if key in row} for row in rows]}
+                return {**selected, "inventories":inventories,
+                        "items":[{key:row[key] for key in fields if key in row} for row in rows]}
+        except InventoryNotFound:
+            raise
         except Exception:
             raise InventoryUnavailable() from None
 
-    async def write(self, fields, old_name=None, expected=None):
+    async def write(self, fields, old_name=None, expected=None, inventory_id=None):
         fields = validate_fields(fields)
         dispatched = False
         try:
             async with self.connection() as (helper, ws, settings):
-                items = await self.list_items(helper, ws, settings, 1)
+                selected = self.select(await self.available(helper, ws), inventory_id)
+                settings["SIW_INVENTORY_ID"] = selected["id"]
+                items = await self.list_items(helper, ws, settings, 2)
                 if old_name is not None:
                     if fingerprint(exact_item(items, old_name)) != expected:
                         raise WriteConflict()
@@ -185,12 +205,14 @@ class InventoryClient:
                 if old_name is not None:
                     data["old_name"] = old_name
                 dispatched = True
-                await helper.request(ws, 2, "call_service", domain="simple_inventory",
+                await helper.request(ws, 3, "call_service", domain="simple_inventory",
                                      service="add_item" if old_name is None else "update_item",
                                      service_data=data)
-                after = await self.list_items(helper, ws, settings, 3)
+                after = await self.list_items(helper, ws, settings, 4)
                 if fingerprint(exact_item(after, fields["name"])) != fingerprint(fields):
                     raise WriteUncertain()
+        except InventoryNotFound:
+            raise
         except (InvalidFields, WriteConflict):
             if dispatched:
                 raise WriteUncertain() from None
@@ -311,24 +333,27 @@ def create_app(client=None, policy=None, networks=None):
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request):
         try:
-            data = await client.read()
+            data = await client.read(request.query_params.get("inventory"))
             return TEMPLATES.TemplateResponse(request=request, name="index.html",
                                               context={"inventory":data,"error":None,
                                                        "saved":request.query_params.get("saved") == "1"})
+        except InventoryNotFound:
+            return HTMLResponse("Inventar nicht vorhanden. Bitte die Inventarauswahl neu oeffnen: <a href=\"/\">Uebersicht</a>", status_code=404)
         except InventoryUnavailable:
             return TEMPLATES.TemplateResponse(request=request, name="index.html",
                 context={"inventory":None,"error":"Home Assistant oder das konfigurierte Inventar ist derzeit nicht erreichbar."},
                 status_code=503)
 
-    def item_form(request, values, action, choices, old_name=None, expected=None):
+    def item_form(request, values, action, choices, inventory, old_name=None, expected=None):
         binding = request.cookies.get("siw_forms", "")
         if not re.fullmatch(r"[0-9a-f]{64}", binding):
             binding = os.urandom(32).hex()
         proof = forms.dumps({"action":action, "old_name":old_name, "expected":expected,
+                             "inventory_id":inventory["id"],
                              "binding":hashlib.sha256(binding.encode()).hexdigest(),
                              "nonce":os.urandom(16).hex()})
         response = TEMPLATES.TemplateResponse(request=request, name="item.html",
-                                             context={"values":values,"action":action,"proof":proof,"choices":choices})
+                                             context={"values":values,"action":action,"proof":proof,"choices":choices,"inventory":inventory})
         response.set_cookie("siw_forms", binding, httponly=True, samesite="strict",
                             secure=request.url.scheme == "https", max_age=3600)
         return response
@@ -336,20 +361,26 @@ def create_app(client=None, policy=None, networks=None):
     @app.get("/items/new", response_class=HTMLResponse)
     async def new_item(request: Request):
         try:
-            inventory = await client.read()
-            return item_form(request, {"quantity":1,"unit":"stück","price":"0,00"}, "new", item_choices(inventory["items"]))
+            inventory = await client.read(request.query_params.get("inventory"))
+            if not inventory["id"]:
+                raise InventoryNotFound()
+            return item_form(request, {"quantity":1,"unit":"stück","price":"0,00"}, "new", item_choices(inventory["items"]), inventory)
+        except InventoryNotFound:
+            return HTMLResponse("Inventar nicht vorhanden. Bitte die Inventarauswahl neu oeffnen: <a href=\"/\">Uebersicht</a>", status_code=404)
         except InventoryUnavailable:
             return HTMLResponse("Inventar derzeit nicht erreichbar.", status_code=503)
 
     @app.get("/items/edit", response_class=HTMLResponse)
     async def edit_item(request: Request):
         try:
-            inventory = await client.read()
+            inventory = await client.read(request.query_params.get("inventory"))
             item = exact_item(inventory["items"], request.query_params.get("item", ""))
-            return item_form(request, editable(item), "edit", item_choices(inventory["items"]),
+            return item_form(request, editable(item), "edit", item_choices(inventory["items"]), inventory,
                              item["name"], fingerprint(item))
         except WriteConflict:
             return HTMLResponse("Artikel nicht eindeutig vorhanden. Bitte Bestand neu laden.", status_code=409)
+        except InventoryNotFound:
+            return HTMLResponse("Inventar nicht vorhanden. Bitte die Inventarauswahl neu oeffnen: <a href=\"/\">Uebersicht</a>", status_code=404)
         except InventoryUnavailable:
             return HTMLResponse("Inventar derzeit nicht erreichbar.", status_code=503)
 
@@ -374,6 +405,8 @@ def create_app(client=None, policy=None, networks=None):
             if (claim["action"] != action or not hmac.compare_digest(claim["binding"], binding)
                     or not re.fullmatch(r"[0-9a-f]{32}", claim["nonce"])):
                 raise ValueError()
+            if not isinstance(claim["inventory_id"], str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", claim["inventory_id"]):
+                raise ValueError()
             if action == "edit" and not isinstance(claim["old_name"], str):
                 raise ValueError()
         except (ValueError, UnicodeError, BadSignature, KeyError, TypeError, AttributeError):
@@ -397,21 +430,26 @@ def create_app(client=None, policy=None, networks=None):
                 return HTMLResponse("Bitte spaeter erneut versuchen.", status_code=429)
             submitted[nonce] = now
             try:
-                await client.write(fields, old_name=claim["old_name"], expected=claim["expected"])
+                await client.write(fields, old_name=claim["old_name"], expected=claim["expected"],
+                                   inventory_id=claim["inventory_id"])
             except WriteConflict:
                 return HTMLResponse("Artikel bereits vorhanden oder zwischenzeitlich geaendert. "
                                     "Bitte Bestand neu laden und das Formular erneut oeffnen.", status_code=409)
+            except InventoryNotFound:
+                return HTMLResponse("Inventar nicht mehr vorhanden. Bitte Uebersicht neu laden.", status_code=404)
             except InventoryUnavailable:
                 return HTMLResponse("Home Assistant nicht erreichbar. Bitte Verbindung pruefen.", status_code=503)
             except WriteUncertain:
                 return HTMLResponse("Speicherung nicht bestaetigt. Bitte zuerst den Bestand pruefen, "
                                     "bevor du erneut speicherst.", status_code=502)
-        return RedirectResponse("/?saved=1", status_code=303)
+        return RedirectResponse("/?" + urlencode({"inventory":claim["inventory_id"],"saved":"1"}), status_code=303)
 
     @app.get("/api/inventory")
-    async def inventory_api():
+    async def inventory_api(request: Request):
         try:
-            return await client.read()
+            return await client.read(request.query_params.get("inventory"))
+        except InventoryNotFound:
+            return JSONResponse({"error":"Inventar nicht vorhanden."}, status_code=404)
         except InventoryUnavailable:
             return JSONResponse({"error":"Inventar derzeit nicht erreichbar."}, status_code=503)
 

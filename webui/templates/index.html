@@ -4,9 +4,19 @@
 <body>
 <h1>SimpleInventory</h1>
 {% if saved %}<p role="status">Artikel gespeichert.</p>{% endif %}
-<p><a href="/items/new">Artikel hinzufügen</a></p>
+
 {% if error %}<p role="alert">{{ error }}</p>{% endif %}
 {% if inventory %}
+{% if inventory.inventories %}
+<form action="/" method="get">
+<label>Inventar <select name="inventory">
+{% for option in inventory.inventories %}
+<option value="{{ option.id }}"{% if option.id == inventory.id %} selected{% endif %}>{{ option.name }}</option>
+{% endfor %}
+</select></label> <button type="submit">Anzeigen</button>
+</form>
+<p><a href="/items/new?inventory={{ inventory.id|urlencode }}">Artikel hinzufügen</a></p>
+{% else %}<p>Keine Inventare verfügbar. Bitte in Home Assistant ein Inventar einrichten.</p>{% endif %}
 <h2>{{ inventory.name }}</h2>
 <p>{{ inventory['items']|length }} Artikel</p>
 {% if inventory['items'] %}
@@ -21,11 +31,11 @@
 <td>{{ item.get('price')|euro_value }}</td>
 <td>{{ item.get('categories', [])|join(', ') or item.get('category', '') or '—' }}</td>
 <td>{{ item.get('locations', [])|join(', ') or item.get('location', '') or '—' }}</td>
-<td><a href="/items/edit?item={{ item.get('name', '')|urlencode }}">Bearbeiten</a></td>
+<td><a href="/items/edit?inventory={{ inventory.id|urlencode }}&amp;item={{ item.get('name', '')|urlencode }}">Bearbeiten</a></td>
 </tr>
 {% endfor %}
 </tbody></table>
 {% else %}<p>Dieses Inventar ist leer.</p>{% endif %}
 {% endif %}
-<p><a href="/">Aktualisieren</a></p>
+<p><a href="/{% if inventory and inventory.id %}?inventory={{ inventory.id|urlencode }}{% endif %}">Aktualisieren</a></p>
 </body></html>

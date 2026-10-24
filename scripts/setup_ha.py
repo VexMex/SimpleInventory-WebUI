@@ -18,7 +18,7 @@ from urllib.parse import urlsplit, urlunsplit
 from websockets.asyncio.client import connect
 
 CONFIG = Path("/etc/simpleinventory-webui/app.env")
-FIELDS = {"HA_URL", "HA_TOKEN", "SIW_INVENTORY_ID", "HA_ALLOW_HTTP"}
+FIELDS = {"HA_URL", "HA_TOKEN", "HA_ALLOW_HTTP"}
 LOG = logging.getLogger("simpleinventory.private_transport")
 LOG.addHandler(logging.NullHandler())
 LOG.propagate = False
@@ -42,14 +42,12 @@ def normalize_url(value):
     return urlunsplit((url.scheme, url.netloc, url.path.rstrip("/"), "", ""))
 
 def validate(values):
-    if set(values) != FIELDS:
+    if not FIELDS <= set(values) or set(values) - FIELDS - {"SIW_INVENTORY_ID"}:
         raise SetupError("Konfiguration ist unvollstaendig oder enthaelt unbekannte Felder.")
-    result = dict(values)
+    result = {key: values[key] for key in FIELDS}
     result["HA_URL"] = normalize_url(result["HA_URL"])
     if not re.fullmatch(r"[A-Za-z0-9_.-]{20,8192}", result["HA_TOKEN"]):
         raise SetupError("Tokenformat ungueltig; langlebigen HA-Zugriffstoken verwenden.")
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", result["SIW_INVENTORY_ID"]):
-        raise SetupError("Ungueltige Inventar-ID.")
     if result["HA_ALLOW_HTTP"] not in {"true", "false"}:
         raise SetupError("Ungueltige Transporteinstellung.")
     if result["HA_URL"].startswith("http://") and result["HA_ALLOW_HTTP"] != "true":
@@ -124,6 +122,23 @@ async def request(ws, number, command, **kwargs):
             return result.get("result")
     raise SetupError("Keine passende API-Antwort erhalten.")
 
+def inventories_from_states(states):
+    if not isinstance(states, list):
+        raise SetupError("Inventare konnten nicht ermittelt werden.")
+    inventories = {}
+    for state in states:
+        if not isinstance(state, dict):
+            continue
+        attrs = state.get("attributes", {})
+        if not isinstance(attrs, dict):
+            continue
+        key = attrs.get("inventory_id")
+        if (isinstance(key, str) and "total_items" in attrs
+                and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", key)):
+            name = str(attrs.get("friendly_name", state.get("entity_id", key)))
+            inventories[key] = re.sub(r"[\x00-\x1f\x7f-\x9f]", "?", name)[:100]
+    return sorted(inventories.items(), key=lambda item: (item[1].casefold(), item[0]))
+
 async def query(base, credential, inventory=None):
     """Only authenticate, discover sensors and read items; never mutate inventory."""
     url = urlsplit(normalize_url(base))
@@ -145,24 +160,10 @@ async def query(base, credential, inventory=None):
                         raise SetupError("Simple Inventory liefert keine gueltige Artikelliste.")
                     return len(result["items"])
                 states = await request(ws, 1, "get_states")
-                if not isinstance(states, list):
-                    raise SetupError("Inventare konnten nicht ermittelt werden.")
-                inventories = {}
-                for state in states:
-                    if not isinstance(state, dict):
-                        continue
-                    attrs = state.get("attributes", {})
-                    if not isinstance(attrs, dict):
-                        continue
-                    key = attrs.get("inventory_id")
-                    if (isinstance(key, str) and "total_items" in attrs
-                            and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", key)):
-                        name = str(attrs.get("friendly_name", state.get("entity_id", key)))
-                        # Server-provided text cannot inject terminal control characters.
-                        inventories[key] = re.sub(r"[\x00-\x1f\x7f-\x9f]", "?", name)[:100]
+                inventories = inventories_from_states(states)
                 if not inventories:
                     raise SetupError("Kein Inventar gefunden. Simple Inventory in HA einrichten.")
-                return list(inventories.items())
+                return inventories
     except SetupError:
         raise
     except Exception:
@@ -171,7 +172,8 @@ async def query(base, credential, inventory=None):
 
 async def check_saved(path=CONFIG):
     values = load_config(path)
-    return await query(values["HA_URL"], values["HA_TOKEN"], values["SIW_INVENTORY_ID"])
+    inventories = await query(values["HA_URL"], values["HA_TOKEN"])
+    return await query(values["HA_URL"], values["HA_TOKEN"], inventories[0][0])
 
 def setup():
     if not sys.stdin.isatty() or not sys.stderr.isatty():
@@ -194,14 +196,9 @@ def setup():
     if not re.fullmatch(r"[A-Za-z0-9_.-]{20,8192}", credential):
         raise SetupError("Tokenformat ungueltig.")
     inventories = asyncio.run(query(base, credential))
-    for number, (_, name) in enumerate(inventories, 1):
-        print(f"{number}: {name}")
-    answer = input("Inventar waehlen [1]: ").strip() or "1"
-    if not answer.isdecimal() or not 1 <= int(answer) <= len(inventories):
-        raise SetupError("Ungueltige Inventarauswahl.")
-    inventory = inventories[int(answer) - 1][0]
-    values = validate({"HA_URL": base, "HA_TOKEN": credential,
-                       "SIW_INVENTORY_ID": inventory, "HA_ALLOW_HTTP": allow_http})
+    inventory = inventories[0][0]
+    print(f"{len(inventories)} Inventar(e) gefunden; alphabetisch erstes Inventar wird lesend geprueft.")
+    values = validate({"HA_URL": base, "HA_TOKEN": credential, "HA_ALLOW_HTTP": allow_http})
     count = asyncio.run(query(base, credential, inventory))
     save_config(values)
     print(f"Anmeldung geprueft und lokal gespeichert; {count} Artikel lesbar.")

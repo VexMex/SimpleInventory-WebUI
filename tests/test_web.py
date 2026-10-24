@@ -16,9 +16,9 @@ class FakeInventory:
         self.items=items if items is not None else [{"name":"Test article","quantity":2,"unit":"Stueck",
                                                     "categories":["Hardware"],"locations":["Shelf"]}]
         self.calls=0
-    async def read(self):
+    async def read(self, inventory_id=None):
         self.calls+=1
-        return {"name":"Test inventory","items":self.items}
+        return {"id":"configured","name":"Test inventory","inventories":[{"id":"configured","name":"Test inventory"}],"items":self.items}
 
 def policy():
     phrase=secrets.token_hex(12)
@@ -50,7 +50,7 @@ class WebTests(unittest.TestCase):
 
     def test_unavailable_backend_does_not_show_exception(self):
         class Broken:
-            async def read(self): raise InventoryUnavailable("private diagnostic")
+            async def read(self, inventory_id=None): raise InventoryUnavailable("private diagnostic")
         with TestClient(create_app(Broken(),AccessPolicy())) as client:
             self.assertEqual(client.get("/").status_code,503)
             self.assertNotIn("private diagnostic",client.get("/").text)

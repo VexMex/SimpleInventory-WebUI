@@ -19,7 +19,7 @@ spec.loader.exec_module(setup_ha)
 
 def values():
     return dict(HA_URL="https://example.invalid", HA_TOKEN=secrets.token_hex(32),
-                SIW_INVENTORY_ID="test_inventory", HA_ALLOW_HTTP="false")
+                HA_ALLOW_HTTP="false")
 
 @unittest.skipUnless(os.geteuid() == 0, "File ownership checks require LXC root")
 class ConfigurationTests(unittest.TestCase):
@@ -68,6 +68,19 @@ class ConfigurationTests(unittest.TestCase):
             with self.subTest(address=address), self.assertRaises(setup_ha.SetupError):
                 setup_ha.normalize_url(address)
 
+    def test_legacy_inventory_setting_is_ignored(self):
+        original = values()
+        self.assertEqual(setup_ha.validate(dict(original, SIW_INVENTORY_ID="old_inventory")), original)
+
+    def test_discovery_sorts_deduplicates_and_ignores_other_sensors(self):
+        rows = [
+            {"attributes":{"inventory_id":"z","total_items":1,"friendly_name":"Zebra"}},
+            {"attributes":{"inventory_id":"a","total_items":0,"friendly_name":"Alpha"}},
+            {"attributes":{"inventory_id":"other","friendly_name":"Not an inventory"}},
+            {"attributes":{"inventory_id":"a","total_items":0,"friendly_name":"Alpha"}},
+        ]
+        self.assertEqual(setup_ha.inventories_from_states(rows), [("a","Alpha"),("z","Zebra")])
+
     def test_require_explicit_http_choice(self):
         with self.assertRaises(setup_ha.SetupError):
             setup_ha.validate(dict(values(), HA_URL="http://example.invalid"))
@@ -102,7 +115,7 @@ class WebsocketTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(await setup_ha.check_saved(path), 1)
                 # Another fresh connection loads disk settings again, without prompting.
                 self.assertEqual(await setup_ha.check_saved(path), 1)
-        self.assertEqual(commands, ["get_states","simple_inventory/list_items","simple_inventory/list_items"])
+        self.assertEqual(commands, ["get_states","get_states","simple_inventory/list_items","get_states","simple_inventory/list_items"])
 
     async def test_auth_rejection_does_not_leak_credentials(self):
         credential = secrets.token_hex(32)

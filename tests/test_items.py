@@ -18,9 +18,9 @@ class MemoryInventory:
         self.items = [{"name":"Bolt", "quantity":2, "unit":"pcs", "category":"Hardware", "location":"Shelf"}]
         self.writes = 0
         self.failure = None
-    async def read(self):
-        return {"name":"Inventory", "items":copy.deepcopy(self.items)}
-    async def write(self, fields, old_name=None, expected=None):
+    async def read(self, inventory_id=None):
+        return {"id":"configured","name":"Inventory","inventories":[{"id":"configured","name":"Inventory"}], "items":copy.deepcopy(self.items)}
+    async def write(self, fields, old_name=None, expected=None, inventory_id=None):
         self.writes += 1
         if self.failure:
             raise self.failure()
@@ -202,7 +202,10 @@ class Adapter(InventoryClient):
                     row.update({key:value for key,value in data.items() if key not in {"inventory_id","old_name"}})
                 else:
                     self.items.append({key:value for key,value in data.items() if key != "inventory_id"})
-        yield SimpleNamespace(request=request), None, {"SIW_INVENTORY_ID":"configured"}
+        yield SimpleNamespace(request=request), None, {}
+
+    async def available(self, helper, ws):
+        return [{"id":"configured","name":"Inventory"}]
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
     async def test_add_service_uses_configured_inventory(self):

@@ -3,6 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Artikel | SimpleInventory</title></head>
 <body>
 <h1>Artikel {% if action == 'new' %}hinzufügen{% else %}bearbeiten{% endif %}</h1>
+<p>Inventar: <strong>{{ inventory.name }}</strong></p>
 <form action="/items/{{ action }}" method="post">
 <input type="hidden" name="proof" value="{{ proof }}">
 <p><label>Name <input name="name" value="{{ values.get('name', '') }}" maxlength="200" required></label></p>
@@ -23,6 +24,6 @@
 </datalist>
 <p>Vorhandenen Wert auswählen oder neuen Wert eintippen. Neue Einheiten, Gruppen und Standorte werden beim Speichern angelegt.</p>
 <p>Mehrere Gruppen oder Standorte mit Komma trennen.</p>
-<button type="submit">Speichern</button> <a href="/">Abbrechen</a>
+<button type="submit">Speichern</button> <a href="/?inventory={{ inventory.id|urlencode }}">Abbrechen</a>
 </form>
 </body></html>
