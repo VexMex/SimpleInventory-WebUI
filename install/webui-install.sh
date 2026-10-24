@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Install reviewed read-only WebUI artifacts inside an existing Debian LXC.
+# Install reviewed WebUI artifacts inside an existing Debian LXC.
 set -Eeuo pipefail
 [[ "$EUID" == 0 ]] || { echo 'Run as root inside the LXC.' >&2; exit 1; }
 [[ "$(systemd-detect-virt --container 2>/dev/null || true)" == lxc ]] || { echo 'Expected an LXC.' >&2; exit 1; }
 APP_ROOT=/opt/simpleinventory-webui
-REF=71ed59f38359c4f78ef8ae1183968be035346aed
+REF=ba25c67b7b2c390a29fb58fd8075daeaeae3d20b
 BASE=https://raw.githubusercontent.com/VexMex/SimpleInventory-WebUI
 [[ -x "$APP_ROOT/venv/bin/python" ]] || { echo 'Run the dependency bootstrap first.' >&2; exit 1; }
 stage=$(mktemp -d /tmp/simpleinventory-webui.XXXXXXXX)
 cleanup() {
-  rm -f -- "$stage/web.py" "$stage/__init__.py" "$stage/index.html" "$stage/login.html" "$stage/web.service" "$stage/setup-ha.py"
+  rm -f -- "$stage/web.py" "$stage/__init__.py" "$stage/index.html" "$stage/login.html" "$stage/item.html" "$stage/web.service" "$stage/setup-ha.py"
   rmdir -- "$stage"
 }
 trap cleanup EXIT
@@ -18,8 +18,9 @@ fetch() {
   printf '%s  %s\n' "$3" "$stage/$2" | sha256sum -c -
 }
 fetch webui/__init__.py __init__.py e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-fetch webui/web.py web.py 5f969373266ff6dcfe7dc43e3707e3e6eee8e32651a0b07365741bdd79959ed0
-fetch webui/templates/index.html index.html 8b27e9193cb1b11c9ab1fdaab0b864df7bf8b59e0ea056ea51e35be9d97611c1
+fetch webui/web.py web.py 9e4c894f9c2d585f1356a3d6e8029e75423c91bc29891127467d22ef623e6c09
+fetch webui/templates/index.html index.html 0df4b9aa584f6c03dfeab074ea7277359c40220aa44ea3325208c1bf3acf50ec
+fetch webui/templates/item.html item.html 2ce0d3b0a0ff7aae0e3e0e25d52412421e8cde2b2ff5334c762ffacf9ab816b8
 fetch webui/templates/login.html login.html c0005cad267992ec0a0072e54b14ee35317abd781786b653cfe131cc474c0954
 fetch install/simpleinventory-web.service web.service 8e04b8b821475b24718e03f771425bb698a6ca65eed7350cbb15d6d19605005e
 fetch scripts/setup_ha.py setup-ha.py 546e2554a858198fa25c2f142c26e4e5c2928148ff141b15ad2b00cb9f251e53
@@ -29,6 +30,7 @@ install -d -m 0755 "$APP_ROOT/releases" "$release" "$release/webui" "$release/we
 install -m 0644 "$stage/__init__.py" "$release/webui/__init__.py"
 install -m 0644 "$stage/web.py" "$release/webui/web.py"
 install -m 0644 "$stage/index.html" "$release/webui/templates/index.html"
+install -m 0644 "$stage/item.html" "$release/webui/templates/item.html"
 install -m 0644 "$stage/login.html" "$release/webui/templates/login.html"
 # Only application code changes; never overwrite /etc/simpleinventory-webui/*.env.
 install -m 0755 "$stage/setup-ha.py" "$APP_ROOT/setup-ha.py"
