@@ -25,6 +25,19 @@ ROOT = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(ROOT / "templates"))
 HELPER = Path("/opt/simpleinventory-webui/setup-ha.py")
 
+def euro_value(value):
+    if value is None or value == "":
+        return "—"
+    try:
+        amount = Decimal(str(value))
+        if not amount.is_finite():
+            return "—"
+        return format(amount, ",.2f").replace(",", "_").replace(".", ",").replace("_", ".") + " €"
+    except (InvalidOperation, ValueError, TypeError):
+        return "—"
+
+TEMPLATES.env.filters["euro_value"] = euro_value
+
 def load_helper():
     spec = importlib.util.spec_from_file_location("siw_ha_setup", HELPER)
     module = importlib.util.module_from_spec(spec)
@@ -43,10 +56,11 @@ class WriteUncertain(Exception):
 class InvalidFields(Exception):
     pass
 
-EDIT_FIELDS = ("name", "quantity", "unit", "category", "location")
+EDIT_FIELDS = ("name", "quantity", "unit", "category", "location", "price")
 
 def editable(item):
     values = {key: item.get(key, "") for key in EDIT_FIELDS}
+    values["price"] = item.get("price") if item.get("price") is not None else 0
     for singular, plural in (("category", "categories"), ("location", "locations")):
         if isinstance(item.get(plural), list):
             values[singular] = ", ".join(str(value) for value in item[plural])
@@ -66,11 +80,15 @@ def item_choices(items):
                 if isinstance(value, str) and value.strip():
                     found.add(value.strip())
         choices[singular] = sorted(found, key=lambda value: (value.casefold(), value))
+    choices["unit"] = sorted({"stück"} | {item["unit"].strip() for item in items
+                                          if isinstance(item.get("unit"), str) and item["unit"].strip()},
+                             key=lambda value: (value.casefold(), value))
     return choices
 
 def fingerprint(item):
     values = editable(item)
-    values["quantity"] = str(Decimal(str(values["quantity"])).normalize())
+    for key in ("quantity", "price"):
+        values[key] = str(Decimal(str(values[key])).normalize())
     return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
 
 def validate_fields(form):
@@ -89,6 +107,13 @@ def validate_fields(form):
     if amount > 1000000000:
         raise InvalidFields()
     result["quantity"] = float(amount)
+    value = str(form.get("price", "0")).strip().replace(",", ".")
+    if not re.fullmatch(r"\d{1,10}(?:\.\d{1,2})?", value, flags=re.ASCII):
+        raise InvalidFields()
+    amount = Decimal(value)
+    if amount > 1000000000:
+        raise InvalidFields()
+    result["price"] = float(amount)
     for key in ("category", "location"):
         result[key] = ", ".join(dict.fromkeys(part.strip() for part in result[key].split(",") if part.strip()))
     return result
@@ -135,7 +160,7 @@ class InventoryClient:
                         name = str(attrs.get("friendly_name", name))
                         break
                 rows = await self.list_items(helper, ws, settings, 2)
-                fields = ("name","quantity","unit","category","categories","location","locations")
+                fields = ("name","quantity","unit","category","categories","location","locations","price")
                 return {"name":name, "items":[{key:row[key] for key in fields if key in row} for row in rows]}
         except Exception:
             raise InventoryUnavailable() from None
@@ -312,7 +337,7 @@ def create_app(client=None, policy=None, networks=None):
     async def new_item(request: Request):
         try:
             inventory = await client.read()
-            return item_form(request, {"quantity":1}, "new", item_choices(inventory["items"]))
+            return item_form(request, {"quantity":1,"unit":"stück","price":"0,00"}, "new", item_choices(inventory["items"]))
         except InventoryUnavailable:
             return HTMLResponse("Inventar derzeit nicht erreichbar.", status_code=503)
 
@@ -340,7 +365,7 @@ def create_app(client=None, policy=None, networks=None):
             if len(body) > 16384:
                 return HTMLResponse("Eingabe zu gross.", status_code=413)
         try:
-            raw = parse_qs(body.decode("utf-8"), max_num_fields=6, keep_blank_values=True)
+            raw = parse_qs(body.decode("utf-8"), max_num_fields=7, keep_blank_values=True)
             if any(len(value) != 1 for value in raw.values()) or set(raw) - set(EDIT_FIELDS) - {"proof"}:
                 raise ValueError()
             form = {key:value[0] for key,value in raw.items()}
@@ -357,6 +382,7 @@ def create_app(client=None, policy=None, networks=None):
             fields = validate_fields(form)
         except InvalidFields:
             return HTMLResponse("Name und eine Menge von 0 bis 1000000000 angeben (max. 6 Nachkommastellen). "
+                                "Wert als Zahl von 0 bis 1000000000 mit maximal 2 Nachkommastellen angeben. "
                                 "Textfelder duerfen keine Steuerzeichen enthalten. Mit Zurueck korrigieren.",
                                 status_code=422)
         async with write_lock:

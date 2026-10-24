@@ -11,13 +11,14 @@
 <p>{{ inventory['items']|length }} Artikel</p>
 {% if inventory['items'] %}
 <table border="1" cellpadding="8">
-<thead><tr><th>Artikel</th><th>Menge</th><th>Einheit</th><th>Gruppe</th><th>Standort</th><th>Aktion</th></tr></thead>
+<thead><tr><th>Artikel</th><th>Menge</th><th>Einheit</th><th>Wert</th><th>Gruppe</th><th>Standort</th><th>Aktion</th></tr></thead>
 <tbody>
 {% for item in inventory['items'] %}
 <tr>
 <td>{{ item.get('name', '') }}</td>
 <td>{{ item.get('quantity', '') }}</td>
 <td>{{ item.get('unit', '') }}</td>
+<td>{{ item.get('price')|euro_value }}</td>
 <td>{{ item.get('categories', [])|join(', ') or item.get('category', '') or '—' }}</td>
 <td>{{ item.get('locations', [])|join(', ') or item.get('location', '') or '—' }}</td>
 <td><a href="/items/edit?item={{ item.get('name', '')|urlencode }}">Bearbeiten</a></td>

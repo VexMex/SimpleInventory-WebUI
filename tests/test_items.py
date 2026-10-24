@@ -139,6 +139,40 @@ class ItemTests(unittest.TestCase):
         values.update(name="Unassigned item", category="", location="")
         self.assertEqual(self.client.post("/items/new", data=values, follow_redirects=False).status_code, 303)
 
+    def test_unit_defaults_suggestions_and_existing_unit(self):
+        self.backend.items[0]["unit"] = "kg"
+        page = self.client.get("/items/new")
+        self.assertIn('value="stück" maxlength="40"', page.text)
+        self.assertIn('<option value="kg">', page.text)
+        page = self.client.get("/items/edit?item=Bolt")
+        self.assertIn('value="kg" maxlength="40"', page.text)
+
+    def test_price_save_display_and_edit(self):
+        values = form(self.client)
+        values.update(price="1234,50", unit="Liter")
+        response = self.client.post("/items/new", data=values, follow_redirects=False)
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(self.backend.items[-1]["price"], 1234.5)
+        self.assertIn("1.234,50 €", self.client.get("/").text)
+        page = self.client.get("/items/edit?item=Nut")
+        self.assertIn('name="price" value="1234.5"', page.text)
+        self.assertIn('<option value="Liter">', self.client.get("/items/new").text)
+
+    def test_invalid_price_cannot_write(self):
+        values = form(self.client)
+        for value in ("-1", "NaN", "inf", "", "12.345", "12 €", "1000000001"):
+            values["price"] = value
+            self.assertEqual(self.client.post("/items/new", data=values).status_code, 422)
+        self.assertEqual(self.backend.writes, 0)
+
+    def test_stale_price_edit_cannot_overwrite(self):
+        self.backend.items[0]["price"] = 12.5
+        values = form(self.client, "/items/edit?item=Bolt")
+        values["price"] = "10"
+        self.backend.items[0]["price"] = 15
+        self.assertEqual(self.client.post("/items/edit", data=values).status_code, 409)
+        self.assertEqual(self.backend.items[0]["price"], 15)
+
     def test_optional_auth_covers_writes(self):
         _, settings = policy()
         with TestClient(create_app(self.backend, settings, lambda:[]),
@@ -173,8 +207,9 @@ class Adapter(InventoryClient):
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
     async def test_add_service_uses_configured_inventory(self):
         client = Adapter([])
-        fields = validate_fields({"name":"Nut", "quantity":"2", "unit":"pcs"})
+        fields = validate_fields({"name":"Nut", "quantity":"2", "unit":"pcs", "price":"12,50"})
         await client.write(fields)
+        self.assertEqual(client.calls[0]["service_data"]["price"], 12.5)
         self.assertEqual(client.calls[0]["service"], "add_item")
         self.assertEqual(client.calls[0]["domain"], "simple_inventory")
         self.assertEqual(client.calls[0]["service_data"]["inventory_id"], "configured")

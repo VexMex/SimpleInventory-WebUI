@@ -7,16 +7,21 @@
 <input type="hidden" name="proof" value="{{ proof }}">
 <p><label>Name <input name="name" value="{{ values.get('name', '') }}" maxlength="200" required></label></p>
 <p><label>Menge <input name="quantity" value="{{ values.get('quantity', '') }}" inputmode="decimal" required></label></p>
-<p><label>Einheit <input name="unit" value="{{ values.get('unit', '') }}" maxlength="40"></label></p>
+<p><label>Einheit <input name="unit" list="unit-options" autocomplete="off" value="{{ values.get('unit', '') }}" maxlength="40"></label></p>
+<p><label>Wert <input name="price" value="{{ values.get('price', '0,00') }}" inputmode="decimal" maxlength="13" required aria-describedby="price-help"></label> €</p>
+<p id="price-help">Wert pro Einheit, z. B. 12,50. Nur die Zahl eingeben.</p>
 <p><label>Gruppe <input name="category" list="category-options" autocomplete="off" value="{{ values.get('category', '') }}" maxlength="500"></label></p>
 <p><label>Standort <input name="location" list="location-options" autocomplete="off" value="{{ values.get('location', '') }}" maxlength="500"></label></p>
+<datalist id="unit-options">
+{% for value in choices.unit %}<option value="{{ value }}"></option>{% endfor %}
+</datalist>
 <datalist id="category-options">
 {% for value in choices.category %}<option value="{{ value }}"></option>{% endfor %}
 </datalist>
 <datalist id="location-options">
 {% for value in choices.location %}<option value="{{ value }}"></option>{% endfor %}
 </datalist>
-<p>Vorhandenen Wert auswählen oder neuen Wert eintippen. Neue Gruppen und Standorte werden beim Speichern angelegt.</p>
+<p>Vorhandenen Wert auswählen oder neuen Wert eintippen. Neue Einheiten, Gruppen und Standorte werden beim Speichern angelegt.</p>
 <p>Mehrere Gruppen oder Standorte mit Komma trennen.</p>
 <button type="submit">Speichern</button> <a href="/">Abbrechen</a>
 </form>
