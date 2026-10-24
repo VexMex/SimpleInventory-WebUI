@@ -33,8 +33,8 @@ BOOTSTRAP_SHA=5bcd879eee26b79a91b44517fb514a733c1abb9bc43438d1043a58842e7dae8f
 SETUP_REV=71ed59f38359c4f78ef8ae1183968be035346aed
 SETUP_SHA=546e2554a858198fa25c2f142c26e4e5c2928148ff141b15ad2b00cb9f251e53
 SERVICE_SHA=bfa927b38b5bd2e3670ce020860bbaa341c83e790fe2f522133ca54189477403
-WEB_REV=de632fea836a6da8f1ed08d1f3dfe2ce01a2407b
-WEB_SHA=523f137dc5a3c7df61e98b84031ebcc66a9b4c1c09373e7724d18fd95371b92c
+WEB_REV=8172acf65774396b5e69800a74ff59be24167f7b
+WEB_SHA=d4333ced3ce37f107174c1e4278bf6c9494e08339d4322ed69688c0f04b44cf2
 REPOSITORY=https://raw.githubusercontent.com/VexMex/SimpleInventory-WebUI
 storage_available() {
   pvesm status --content "$2" | awk -v wanted="$1" 'NR>1 && $1==wanted && $3=="active" {found=1} END {exit !found}'
@@ -65,7 +65,7 @@ prompt() {
   if [[ -n "$answer" ]]; then printf -v "$name" '%s' "$answer"; fi
 }
 printf '\nSimpleInventory-WebUI - Proxmox LXC setup\n'
-printf 'Current scope: read-only WebUI and manual HA connection setup.\n'
+printf 'Current scope: inventory display, item creation/editing and manual HA connection setup.\n'
 if [[ "$NONINTERACTIVE" == 0 ]]; then
   [[ -r /dev/tty && -w /dev/tty ]] || die 'Interactive terminal required.'
   prompt CTID 'Container ID'

@@ -1,10 +1,10 @@
-# First read-only WebUI
+# Inventory WebUI
 
 ## Access and data
 
 The systemd service simpleinventory-web.service listens on 0.0.0.0:80. Use the LXC IPv4 address or a DNS name resolving to it in a browser. A separate DNS record must be provided by your router or DNS server if desired.
 
-GET / displays the configured inventory and its items. GET /api/inventory provides the same selected fields as JSON. Both read fresh data from HA. The application does not provide inventory write endpoints in this version. GET /health checks the web process, not HA connectivity.
+GET / displays the configured inventory and its items. GET /api/inventory provides the same selected fields as JSON. Both read fresh data from HA. GET /items/new opens a creation form. GET /items/edit?item=NAME opens an existing item. POST /items/new and POST /items/edit save through HA simple_inventory.add_item and simple_inventory.update_item services. Only the configured inventory can be changed; the browser cannot choose another inventory. GET /health checks the web process, not HA connectivity.
 
 On HA connection, authentication or inventory failure, the UI responds with a neutral message and HTTP 503. Tokens, HA addresses and upstream exception payloads are not exposed. HTML templates escape HA-provided content.
 
@@ -18,7 +18,7 @@ The service is enabled at installation and restarts after a container reboot. Ex
 
 ## Prepared shared-password mode
 
-Default: password authentication is disabled. This means every client that can reach the port can read the inventory; it is not a firewall restriction.
+Default: password authentication is disabled. This means every client that can reach the port can read and change the inventory; it is not a firewall restriction.
 
 A single-password login form is implemented with no username. Optional settings belong in /etc/simpleinventory-webui/web.env, root-owned with mode 0600. The settings are:
 - SIW_AUTH_ENABLED: true to require configured authentication.
@@ -40,6 +40,14 @@ The server explicitly ignores forwarded HTTP headers and does not use X-Forwarde
 
 ## Validation
 
-22 automated tests passed in the Debian 13 test LXC, covering the HA setup and WebUI, including HTML escaping, empty inventories, upstream failure handling, optional password sessions, CSRF checks, login size/attempt limits, local-subnet changes and spoofed forwarding headers.
+37 automated tests passed in the Debian 13 test LXC, covering the HA setup and WebUI, including HTML escaping, empty inventories, upstream failure handling, optional password sessions, CSRF checks, login size/attempt limits, local-subnet changes and spoofed forwarding headers.
 
-The real configured HA inventory was displayed successfully after deployment. The service runs as its dedicated non-root user and the private HA configuration file was verified unchanged. The existing v0.1.0 snapshot remains the recovery baseline.
+A temporary test item was created, edited and renamed through the deployed forms with real HA, then removed. Existing inventory items and the private HA configuration remained unchanged. The service runs as its dedicated non-root user and the private HA configuration file was verified unchanged. The existing v0.1.0 snapshot remains the recovery baseline.
+
+## Editing and save protection
+
+Editable fields are name, quantity, unit, category and location. Quantities allow zero and up to six decimal places, using a decimal point or comma. Empty category/location clears those values. Multiple values are comma-separated. Other HA item metadata is omitted from updates so it is preserved.
+
+Forms use signed, expiring, cookie-bound proofs even when password authentication is disabled. Replayed submissions are blocked. Before updating, the application compares the current editable values with the values shown when the form was opened. A conflict requires reopening the form. This catches changes observed before dispatch; HA does not expose an atomic conditional update, so a concurrent change in the brief interval before saving cannot be excluded.
+
+Duplicate item names and aliases are checked before creation/renaming. After a write, the item is read again to confirm the saved fields. A connection failure after dispatch is reported as an uncertain result and is never automatically retried: check the inventory before submitting again. Form proofs expire after 15 minutes and may require reopening after a service restart.

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0-dev - Unreleased
+
+- Add and edit items through the WebUI: name, quantity, unit, category and location.
+- Save changes directly to the configured Home Assistant inventory without a separate database.
+- Add signed forms, duplicate-submission protection and checks for stale edits and duplicate names.
+- Verify writes by reading saved values; uncertain results are never retried automatically.
+- Update the pinned LXC installer and preserve private runtime settings.
+- Pass 37 automated tests and a real create/edit/rename test with temporary-item cleanup.
+
+## 0.2.0 - 2026-10-24
+
+- First read-only WebUI on HTTP port 80, showing the configured HA inventory.
+- Automatic web service startup and prepared optional shared-password authentication.
+
 ## 0.1.0 - 2026-10-24
 
 First tested infrastructure and Home Assistant connection baseline.
