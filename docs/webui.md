@@ -40,7 +40,7 @@ The server explicitly ignores forwarded HTTP headers and does not use X-Forwarde
 
 ## Validation
 
-37 automated tests passed in the Debian 13 test LXC, covering the HA setup and WebUI, including HTML escaping, empty inventories, upstream failure handling, optional password sessions, CSRF checks, login size/attempt limits, local-subnet changes and spoofed forwarding headers.
+39 automated tests passed in the Debian 13 test LXC, covering the HA setup and WebUI, including HTML escaping, empty inventories, upstream failure handling, optional password sessions, CSRF checks, login size/attempt limits, local-subnet changes and spoofed forwarding headers.
 
 A temporary test item was created, edited and renamed through the deployed forms with real HA, then removed. Existing inventory items and the private HA configuration remained unchanged. The service runs as its dedicated non-root user and the private HA configuration file was verified unchanged. The existing v0.1.0 snapshot remains the recovery baseline.
 
@@ -51,3 +51,7 @@ Editable fields are name, quantity, unit, category and location. Quantities allo
 Forms use signed, expiring, cookie-bound proofs even when password authentication is disabled. Replayed submissions are blocked. Before updating, the application compares the current editable values with the values shown when the form was opened. A conflict requires reopening the form. This catches changes observed before dispatch; HA does not expose an atomic conditional update, so a concurrent change in the brief interval before saving cannot be excluded.
 
 Duplicate item names and aliases are checked before creation/renaming. After a write, the item is read again to confirm the saved fields. A connection failure after dispatch is reported as an uncertain result and is never automatically retried: check the inventory before submitting again. Form proofs expire after 15 minutes and may require reopening after a service restart.
+
+## Group and location suggestions
+
+Creation and editing forms offer existing category and location values from items in the configured inventory using native editable dropdowns. Suggestions refresh whenever a form is opened. Blank values are excluded, duplicates are removed and the lists are sorted. Free text is accepted: new values are created by HA when saving the item and become suggestions on the next form load. Opening a form does not create any values. Multiple values may still be entered separated by commas. Native dropdown presentation and filtering follow the browser's behavior.
