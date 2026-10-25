@@ -1,4 +1,6 @@
 # SimpleInventory-WebUI
+Thanks for the Really good and easy to use Inventory in Homeassistant. This is really something i was searching for, for a long time. 
+All credits go to: https://github.com/blaineventurine/simple_inventory
 
 Current development: **0.4.0-dev**, localization, display preferences and a shared visual design. Previous functional baseline: **0.3.0**. Saved baseline: **0.1.0**. See [changelog](CHANGELOG.md) and [version recovery notes](docs/versioning.md).
 
