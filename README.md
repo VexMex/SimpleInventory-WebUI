@@ -4,6 +4,8 @@ Current development: **0.4.0-dev**, localization, display preferences and a shar
 
 A Python web interface for the Simple Inventory integration in Home Assistant.
 
+Made with AI, since i can do some coding, but by far not enough to pull this off.
+
 ## Current state
 
 This repository now contains the functional WebUI, installation scripts and credential policy. Existing LICENSE is retained. Private HA settings are configured manually after installation.
